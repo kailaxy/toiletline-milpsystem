@@ -431,7 +431,7 @@ const deriveMachineHealth = (machine: any): Pick<Machine, 'status' | 'reliabilit
 
   const normalizedAge = ageDays === null
     ? 0
-    : clamp(ageDays / 60, 0, 1);
+    : clamp(ageDays / 30, 0, 1);
 
   const baseReliability = 35 + (normalizedMttf * 45) + (normalizedMttr * 20);
   const ageDecay = normalizedAge * 45;

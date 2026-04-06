@@ -117,7 +117,7 @@ export default function Dashboard() {
                                         <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div className="bg-blue-600 h-2 rounded-full" style={{width: `${m.reliabilityScore}%`}}></div>
                                         </div>
-                                        <span className="text-slate-500">{m.reliabilityScore.toFixed(0)}%</span>
+                                        <span className="text-slate-500">{m.reliabilityScore.toFixed(1)}%</span>
                                     </div>
                                 </td>
                             </tr>
