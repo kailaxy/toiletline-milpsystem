@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { runOptimization, OptimizeResponse } from '../services/api';
+import { getMachineColor, MACHINE_COLOR_MAP, runOptimization, OptimizeResponse } from '../services/api';
 import { Loader2, ArrowRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -57,9 +57,13 @@ export default function Optimization() {
     return {
       day: `Day ${i + 1}`,
       count: machinesOnDay.length,
-      names: machinesOnDay.map(m => m.machine).join(', ')
+      machineNames: machinesOnDay.map(m => m.machine)
     };
   });
+
+  const legendMachineNames = result
+    ? Array.from(new Set(result.schedule.map(item => item.machine))).sort((a, b) => a.localeCompare(b))
+    : Object.keys(MACHINE_COLOR_MAP);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 w-full">
@@ -131,6 +135,14 @@ export default function Optimization() {
           {/* Machine vs Time Slot Visualization */}
           <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col">
             <h2 className="text-xl font-semibold mb-4 text-slate-800 shrink-0">Maintenance Load by Day</h2>
+            <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-600">
+              {legendMachineNames.map((machineName) => (
+                <div key={machineName} className="flex items-center gap-2">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getMachineColor(machineName) }} />
+                  <span>{machineName}</span>
+                </div>
+              ))}
+            </div>
             <div className="flex-1 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
@@ -146,7 +158,13 @@ export default function Optimization() {
                           <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg text-sm">
                             <p className="font-semibold text-slate-800 mb-1">{d.day}</p>
                             <p className="text-slate-600">Machines: {d.count}</p>
-                            {d.names && <p className="text-slate-500 mt-1 text-xs">{d.names}</p>}
+                            {Array.isArray(d.machineNames) && d.machineNames.length > 0 && (
+                              <div className="mt-1 text-xs space-y-1">
+                                {d.machineNames.map((machineName: string) => (
+                                  <p key={machineName} style={{ color: getMachineColor(machineName) }}>{machineName}</p>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       }

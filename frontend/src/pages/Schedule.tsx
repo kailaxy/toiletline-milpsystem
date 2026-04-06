@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react';
-import { runOptimization, OptimizeResponse } from '../services/api';
+import { getMachineColor, runOptimization, OptimizeResponse, ScheduleItem } from '../services/api';
 import { CalendarDays, Settings, Clock, CheckCircle } from 'lucide-react';
+
+const formatDuration = (task: ScheduleItem): string => {
+  if (task.maintenance_duration_minutes != null) {
+    return `${task.maintenance_duration_minutes.toFixed(0)} min`;
+  }
+
+  if (task.maintenance_duration_hours != null) {
+    return `${task.maintenance_duration_hours.toFixed(2)} hrs`;
+  }
+
+  if (task.maintenance_duration_days != null) {
+    return `${task.maintenance_duration_days} day(s)`;
+  }
+
+  return 'N/A';
+};
+
+const formatDowntimeHours = (hours: number | null | undefined): string => {
+  if (hours == null) {
+    return '-';
+  }
+  return hours.toFixed(2);
+};
 
 export default function Schedule() {
   const [schedule, setSchedule] = useState<OptimizeResponse['schedule']>([]);
@@ -73,8 +96,8 @@ export default function Schedule() {
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Settings className="h-4 w-4" /></div>
-                        <span className="font-medium text-slate-900">{task.machine}</span>
+                        <div className="p-2 rounded-lg" style={{ backgroundColor: `${getMachineColor(task.machine)}20`, color: getMachineColor(task.machine) }}><Settings className="h-4 w-4" /></div>
+                        <span className="font-medium" style={{ color: getMachineColor(task.machine) }}>{task.machine}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -90,16 +113,12 @@ export default function Schedule() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {task.maintenance_duration_days ? (
-                        <div className="flex items-center gap-2 text-slate-600">
-                          {task.maintenance_duration_days} day(s)
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-sm">N/A</span>
-                      )}
+                      <div className="flex items-center gap-2 text-slate-600">
+                        {formatDuration(task)}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-amber-600">
-                      {task.expected_downtime_hours != null ? task.expected_downtime_hours : <span className="text-slate-300 font-normal">-</span>}
+                      {task.expected_downtime_hours != null ? formatDowntimeHours(task.expected_downtime_hours) : <span className="text-slate-300 font-normal">-</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-red-600">
                       {task.estimated_cost_impact != null ? `PHP ${task.estimated_cost_impact.toLocaleString()}` : <span className="text-slate-300 font-normal">-</span>}

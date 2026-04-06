@@ -53,9 +53,29 @@ export interface ScheduleItem {
   machine_id?: number | null;
   day_index?: number | null;
   maintenance_duration_days?: number | null;
+  maintenance_duration_hours?: number | null;
+  maintenance_duration_minutes?: number | null;
   expected_downtime_hours?: number | null;
   estimated_cost_impact?: number | null;
 }
+
+export const MACHINE_COLOR_MAP: Record<string, string> = {
+  Rewinder: '#2563EB',
+  Accumulator: '#0891B2',
+  Distributor: '#16A34A',
+  'Log Saw': '#D97706',
+  'Log Saw 2': '#DC2626',
+  Packaging: '#7C3AED',
+};
+
+const MACHINE_COLOR_FALLBACK = '#64748B';
+
+export const getMachineColor = (machineName: string | null | undefined): string => {
+  if (!machineName) {
+    return MACHINE_COLOR_FALLBACK;
+  }
+  return MACHINE_COLOR_MAP[machineName] || MACHINE_COLOR_FALLBACK;
+};
 
 export interface KPIResponse {
   predicted_downtime: number;
@@ -128,11 +148,11 @@ const getDemoOptimizationResult = (params: OptimizeRequest): Promise<OptimizeRes
     setTimeout(() => {
       resolve({
         schedule: [
-          { machine: 'Log Saw', day: 'Day 1', time: '08:00', machine_id: 4, day_index: 0, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
-          { machine: 'Accumulator', day: 'Day 3', time: '08:00', machine_id: 2, day_index: 2, maintenance_duration_days: 1, expected_downtime_hours: 6, estimated_cost_impact: 10800 },
-          { machine: 'Log Saw 2', day: 'Day 5', time: '08:00', machine_id: 5, day_index: 4, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
+          { machine: 'Log Saw', day: 'Day 1', time: '08:00', machine_id: 4, day_index: 0, maintenance_duration_days: 1, maintenance_duration_hours: 8.4, maintenance_duration_minutes: 504, expected_downtime_hours: 8.4, estimated_cost_impact: 25200 },
+          { machine: 'Accumulator', day: 'Day 3', time: '08:00', machine_id: 2, day_index: 2, maintenance_duration_days: 1, maintenance_duration_hours: 4.2, maintenance_duration_minutes: 252, expected_downtime_hours: 4.2, estimated_cost_impact: 7560 },
+          { machine: 'Log Saw 2', day: 'Day 5', time: '08:00', machine_id: 5, day_index: 4, maintenance_duration_days: 1, maintenance_duration_hours: 8.4, maintenance_duration_minutes: 504, expected_downtime_hours: 8.4, estimated_cost_impact: 25200 },
         ],
-        kpis: { predicted_downtime: 30.0, availability: 95.8, predicted_downtime_hours: 30.0, fleet_availability: 95.8, horizon_days: params.horizon_days }
+        kpis: { predicted_downtime: 21.0, availability: 95.8, predicted_downtime_hours: 21.0, fleet_availability: 95.8, horizon_days: params.horizon_days }
       });
     }, 1200);
   });

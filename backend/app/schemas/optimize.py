@@ -23,6 +23,8 @@ class ScheduleItem(BaseModel):
     machine_id: int | None = None
     day_index: int | None = None
     maintenance_duration_days: int | None = None
+    maintenance_duration_hours: float | None = None
+    maintenance_duration_minutes: float | None = None
     expected_downtime_hours: float | None = None
     estimated_cost_impact: float | None = None
 

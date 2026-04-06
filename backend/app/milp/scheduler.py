@@ -18,6 +18,7 @@ class MachineProfile:
     mttf_days: float
     mttr_days: float
     pm_interval_days: int
+    pm_duration_hours: float
     pm_duration_days: int
     baseline_downtime_days: float
     downtime_cost_per_hour: float
@@ -38,9 +39,10 @@ def _build_machine_profile(machine: Machine, horizon_days: int) -> MachineProfil
 
     # Capstone formulas (required):
     # pm_interval = floor(mttf * 0.85)
-    # pm_duration = ceil(mttr * 0.70)
+    # pm_duration_hours = mttr_hours * 0.70
     pm_interval_days = math.floor(mttf_days * 0.85)
-    pm_duration_days = max(1, math.ceil(mttr_days * 0.70))
+    pm_duration_hours = max(machine.mttr_hours * 0.70, 0.05)
+    pm_duration_days = max(1, math.ceil(pm_duration_hours / 24.0))
 
     baseline_downtime_days = (horizon_days / mttf_days) * mttr_days
 
@@ -50,6 +52,7 @@ def _build_machine_profile(machine: Machine, horizon_days: int) -> MachineProfil
         mttf_days=mttf_days,
         mttr_days=mttr_days,
         pm_interval_days=pm_interval_days,
+        pm_duration_hours=pm_duration_hours,
         pm_duration_days=pm_duration_days,
         baseline_downtime_days=baseline_downtime_days,
         downtime_cost_per_hour=machine.downtime_cost_per_hour,
@@ -202,7 +205,7 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
             if value(x[profile.machine_id][day]) and value(x[profile.machine_id][day]) > 0.5:
                 selected_days.append(day)
 
-        machine_optimized_days = float(profile.pm_duration_days * len(selected_days))
+        machine_optimized_days = (profile.pm_duration_hours * len(selected_days)) / 24.0
         machine_baseline_days = profile.baseline_downtime_days
 
         optimized_downtime_days += machine_optimized_days
@@ -210,8 +213,8 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
         baseline_per_machine_days[profile.machine_name] = round(machine_baseline_days, 4)
 
         for selected_day in selected_days:
-            task_downtime_days = float(profile.pm_duration_days)
-            task_cost = task_downtime_days * 24.0 * profile.downtime_cost_per_hour
+            task_downtime_hours = float(profile.pm_duration_hours)
+            task_cost = task_downtime_hours * profile.downtime_cost_per_hour
             schedule.append(
                 ScheduleItem(
                     machine=profile.machine_name,
@@ -220,7 +223,9 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
                     machine_id=profile.machine_id,
                     day_index=selected_day,
                     maintenance_duration_days=profile.pm_duration_days,
-                    expected_downtime_hours=round(task_downtime_days * 24.0, 2),
+                    maintenance_duration_hours=round(task_downtime_hours, 2),
+                    maintenance_duration_minutes=round(task_downtime_hours * 60.0, 1),
+                    expected_downtime_hours=round(task_downtime_hours, 2),
                     estimated_cost_impact=round(task_cost, 2),
                 )
             )
