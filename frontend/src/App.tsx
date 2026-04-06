@@ -1,0 +1,20 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import DashboardLayout from './layouts/DashboardLayout';
+import Dashboard from './pages/Dashboard';
+import Optimization from './pages/Optimization';
+import Schedule from './pages/Schedule';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<DashboardLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="optimization" element={<Optimization />} />
+          <Route path="schedule" element={<Schedule />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}

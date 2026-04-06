@@ -39,6 +39,7 @@ build/Release
 
 # Dependency directories
 node_modules/
+frontend/node_modules/
 jspm_packages/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -81,6 +82,7 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+frontend/dist/
 
 # Gatsby files
 .cache/
@@ -137,3 +139,20 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

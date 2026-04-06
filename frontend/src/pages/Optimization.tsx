@@ -1,0 +1,135 @@
+import { useState } from 'react';
+import { runOptimization, OptimizeResponse } from '../services/api';
+import { Loader2, ArrowRight } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+export default function Optimization() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<OptimizeResponse | null>(null);
+  
+  const [horizonDays, setHorizonDays] = useState(7);
+  const [capacity, setCapacity] = useState(2);
+  const [avoidPeak, setAvoidPeak] = useState(true);
+
+  const handleOptimize = async () => {
+    setLoading(true);
+    const res = await runOptimization({ 
+      horizon_days: horizonDays, 
+      maintenance_capacity_per_day: capacity,
+      peak_day_indices: [1, 2], // Mon, Tue demo
+      avoid_peak_days: avoidPeak
+    });
+    setResult(res);
+    setLoading(false);
+  };
+
+  // Convert schedule to chart data
+  const chartData = Array.from({ length: horizonDays }, (_, i) => {
+    const targetDayIndex = i;
+    const machinesOnDay = result?.schedule.filter(s => 
+      (s.day_index ?? -1) === targetDayIndex || 
+      (s.day_index ?? -1) <= targetDayIndex && (s.day_index ?? -1) + (s.maintenance_duration_days || 1) > targetDayIndex
+    ) || [];
+    return {
+      day: `Day ${i + 1}`,
+      count: machinesOnDay.length,
+      names: machinesOnDay.map(m => m.machine).join(', ')
+    };
+  });
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6 pb-12 w-full">
+      <h1 className="text-3xl font-bold text-slate-800">Schedule Optimization</h1>
+      <p className="text-slate-500 mb-6 max-w-2xl">Use Mixed Integer Linear Programming (MILP) to minimize downtime cost while completing pending maintenance.</p>
+
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+        <h2 className="text-xl font-semibold mb-4 text-slate-800">Optimization Parameters</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+           <div className="space-y-1">
+             <label className="block text-sm font-medium text-slate-700">Horizon (Days)</label>
+             <input type="number" value={horizonDays} onChange={e => setHorizonDays(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+           </div>
+           <div className="space-y-1">
+             <label className="block text-sm font-medium text-slate-700">Daily Capacity</label>
+             <input type="number" value={capacity} onChange={e => setCapacity(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+           </div>
+           <div className="space-y-1 pb-2 flex items-center gap-2">
+             <input type="checkbox" id="avoid" checked={avoidPeak} onChange={e => setAvoidPeak(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+             <label htmlFor="avoid" className="text-sm font-medium text-slate-700">Avoid Peak Days</label>
+           </div>
+           <button 
+             onClick={handleOptimize}
+             disabled={loading}
+             className="w-full px-6 py-2.5 bg-blue-600 text-white rounded-lg shadow-sm font-medium hover:bg-blue-700 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+           >
+             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Run Optimizer'}
+           </button>
+        </div>
+      </div>
+
+      {result && (
+        <div className="space-y-6 mt-8">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-semibold mb-6 flex items-center justify-between text-slate-800">
+              Optimization Results 
+              <span className="text-xs font-semibold px-3 py-1 bg-green-100 text-green-700 rounded-full tracking-wide">
+                SOLUTION FOUND
+              </span>
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Availability KPI</h3>
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl text-slate-300 line-through">85.0%</div>
+                  <ArrowRight className="text-slate-300 h-6 w-6" />
+                  <div className="text-4xl font-black text-blue-600">{result.kpis.availability.toFixed(1)}%</div>
+                </div>
+              </div>
+              
+              <div className="p-6 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Predicted Downtime (hrs)</h3>
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl text-slate-300 line-through">45.0</div>
+                  <ArrowRight className="text-slate-300 h-6 w-6" />
+                  <div className="text-4xl font-black text-green-600">{result.kpis.predicted_downtime.toFixed(1)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Machine vs Time Slot Visualization */}
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col">
+            <h2 className="text-xl font-semibold mb-4 text-slate-800 shrink-0">Maintenance Load by Day</h2>
+            <div className="flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748B'}} />
+                  <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748B'}} />
+                  <Tooltip 
+                    cursor={{ fill: '#F1F5F9' }} 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg text-sm">
+                            <p className="font-semibold text-slate-800 mb-1">{d.day}</p>
+                            <p className="text-slate-600">Machines: {d.count}</p>
+                            {d.names && <p className="text-slate-500 mt-1 text-xs">{d.names}</p>}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }} 
+                  />
+                  <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Machines Under Maintenance" maxBarSize={60} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
