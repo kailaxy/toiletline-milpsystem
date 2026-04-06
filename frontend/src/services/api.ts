@@ -341,6 +341,8 @@ const toFiniteNumber = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
 const hoursToMinutes = (hours: number): number => hours * MINUTES_PER_HOUR;
 const minutesToHours = (minutes: number): number => minutes / MINUTES_PER_HOUR;
 
@@ -406,25 +408,43 @@ const toBackendMachinePayload = (
 const deriveMachineHealth = (machine: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
   const ageDays = toFiniteNumber(machine?.last_maintenance_days_ago);
   const mttfMinutes = toMinutesFromPayload(machine, 'mttf_minutes', 'mttf_hours');
-  const mttfHours = mttfMinutes !== undefined ? minutesToHours(mttfMinutes) : null;
+  const mttrMinutes = toMinutesFromPayload(machine, 'mttr_minutes', 'mttr_hours');
 
-  // Fallback path when core reliability inputs are missing.
-  if (ageDays === null || mttfHours === null || mttfHours <= 0) {
+  // Fallback path when both reliability metrics are missing.
+  if (mttfMinutes === undefined && mttrMinutes === undefined) {
     if (ageDays === null) {
       return { status: 'running', reliabilityScore: 80 };
     }
 
-    return {
-      status: ageDays > 30 ? 'down' : ageDays > 20 ? 'preventive' : 'running',
-      reliabilityScore: Math.max(0, Math.min(100, 100 - (ageDays * 0.5))),
-    };
+    const ageOnlyScore = Math.round(clamp(90 - (ageDays * 1.1), 5, 95));
+    const ageOnlyStatus: Machine['status'] = ageOnlyScore < 35 ? 'down' : ageOnlyScore < 60 ? 'preventive' : 'running';
+    return { status: ageOnlyStatus, reliabilityScore: ageOnlyScore };
   }
 
-  const pmIntervalDays = Math.max(1, Math.floor((mttfHours / 24) * 0.85));
-  const ageRatio = ageDays / pmIntervalDays;
+  const normalizedMttf = mttfMinutes === undefined
+    ? 0.5
+    : clamp((mttfMinutes - 12000) / 36000, 0, 1);
 
-  const status: Machine['status'] = ageRatio > 1 ? 'down' : ageRatio > 0.8 ? 'preventive' : 'running';
-  const reliabilityScore = Math.max(0, Math.min(100, 100 - (ageRatio * 100)));
+  const normalizedMttr = mttrMinutes === undefined
+    ? 0.5
+    : 1 - clamp((mttrMinutes - 120) / 780, 0, 1);
+
+  const normalizedAge = ageDays === null
+    ? 0
+    : clamp(ageDays / 60, 0, 1);
+
+  const baseReliability = 35 + (normalizedMttf * 45) + (normalizedMttr * 20);
+  const ageDecay = normalizedAge * 45;
+  const reliabilityScore = Math.round(clamp(baseReliability - ageDecay, 0, 100));
+
+  let status: Machine['status'];
+  if (reliabilityScore < 35 || (ageDays !== null && ageDays > 60 && reliabilityScore < 50)) {
+    status = 'down';
+  } else if (reliabilityScore < 60 || (ageDays !== null && ageDays > 40)) {
+    status = 'preventive';
+  } else {
+    status = 'running';
+  }
 
   return { status, reliabilityScore };
 };
