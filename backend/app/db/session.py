@@ -15,6 +15,11 @@ else:
     db_file_path.parent.mkdir(parents=True, exist_ok=True)
     DATABASE_URL = f"sqlite:///{db_file_path.as_posix()}"
 
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgres://") :]
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://") :]
+
 engine_kwargs = {}
 if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
