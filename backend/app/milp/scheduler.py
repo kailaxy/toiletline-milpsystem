@@ -63,17 +63,38 @@ def _day_label(day_index: int, horizon_days: int) -> str:
     return f"Day {day_index + 1}"
 
 
-def _latest_allowed_start_day(profile: MachineProfile) -> int:
+def _first_due_deadline(profile: MachineProfile) -> int:
     """
-    Latest day index when PM can start before machine age exceeds pm_interval.
+    First due deadline day index for recurring PM cycles.
 
-    Condition enforced:
-      current_age_days + start_day < pm_interval_days
-
-    Rearranged bound for integer day indices:
-      start_day <= ceil(pm_interval_days - current_age_days) - 1
+    Required formula:
+      D0 = ceil(pm_interval_days - current_age_days) - 1
     """
     return math.ceil(profile.pm_interval_days - profile.current_age_days) - 1
+
+
+def _build_cycle_windows(profile: MachineProfile, horizon_days: int) -> list[tuple[int, int, int]]:
+    """
+    Build recurring cycle windows as (deadline_day, window_start, window_end).
+
+    For each cycle q:
+      Dq = D0 + q * pm_interval_days
+      enforce exactly one start in [max(0, Dq - pm_interval_days + 1), Dq]
+    """
+    interval = profile.pm_interval_days
+    first_deadline = _first_due_deadline(profile)
+    windows: list[tuple[int, int, int]] = []
+
+    if interval <= 0:
+        return windows
+
+    deadline = first_deadline
+    while deadline < horizon_days:
+        window_start = max(0, deadline - interval + 1)
+        windows.append((deadline, window_start, deadline))
+        deadline += interval
+
+    return windows
 
 
 def run_maintenance_optimization(machines: list[Machine], request: OptimizeRequest) -> OptimizeResponse:
@@ -88,16 +109,16 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
     hard_capacity = max(1, min(requested_capacity, 2))
 
     # Validate immediate due-date feasibility before solving.
-    latest_start_by_machine: dict[int, int] = {}
+    cycle_windows_by_machine: dict[int, list[tuple[int, int, int]]] = {}
     for profile in profiles:
-        latest_start_day = _latest_allowed_start_day(profile)
-        latest_start_by_machine[profile.machine_id] = latest_start_day
-        if latest_start_day < 0:
+        first_deadline = _first_due_deadline(profile)
+        if first_deadline < 0:
             raise ValueError(
                 "Infeasible due-date constraints: "
                 f"machine '{profile.machine_name}' already exceeds pm_interval "
                 f"(current_age_days={profile.current_age_days}, pm_interval_days={profile.pm_interval_days})."
             )
+        cycle_windows_by_machine[profile.machine_id] = _build_cycle_windows(profile, horizon_days=horizon)
 
     model = LpProblem("preventive_maintenance_scheduler", LpMinimize)
 
@@ -111,23 +132,21 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
         for profile in profiles
     }
 
-    # Objective: earlier feasible PM starts are preferred to minimize lateness risk.
+    # Objective: minimize earliness-to-deadline over recurring cycle windows.
     model += lpSum(
-        (day + 1) * x[profile.machine_id][day]
+        (deadline_day - day) * x[profile.machine_id][day]
         for profile in profiles
-        for day in range(horizon)
+        for deadline_day, window_start, window_end in cycle_windows_by_machine[profile.machine_id]
+        for day in range(window_start, window_end + 1)
     )
 
-    # Every machine must have exactly one PM task scheduled in the optimization horizon.
+    # Each machine gets one PM start per due-cycle window, and no extra starts.
     for profile in profiles:
-        model += lpSum(x[profile.machine_id][day] for day in range(horizon)) == 1
+        cycle_windows = cycle_windows_by_machine[profile.machine_id]
+        model += lpSum(x[profile.machine_id][day] for day in range(horizon)) == len(cycle_windows)
 
-    # Due-date constraint: PM must start before machine age exceeds pm_interval.
-    for profile in profiles:
-        latest_start_day = latest_start_by_machine[profile.machine_id]
-        if latest_start_day < horizon - 1:
-            allowed_window_end = max(0, latest_start_day)
-            model += lpSum(x[profile.machine_id][day] for day in range(0, allowed_window_end + 1)) == 1
+        for deadline_day, window_start, window_end in cycle_windows:
+            model += lpSum(x[profile.machine_id][day] for day in range(window_start, window_end + 1)) == 1
 
     # Capacity constraint: active concurrent maintenances at each exact day index <= hard_capacity (<=2).
     for day in range(horizon):
@@ -178,32 +197,35 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
     baseline_per_machine_days: dict[str, float] = {}
 
     for profile in profiles:
-        selected_day = 0
+        selected_days: list[int] = []
         for day in range(horizon):
             if value(x[profile.machine_id][day]) and value(x[profile.machine_id][day]) > 0.5:
-                selected_day = day
-                break
+                selected_days.append(day)
 
-        machine_optimized_days = float(profile.pm_duration_days)
+        machine_optimized_days = float(profile.pm_duration_days * len(selected_days))
         machine_baseline_days = profile.baseline_downtime_days
-        machine_cost = machine_optimized_days * 24.0 * profile.downtime_cost_per_hour
 
         optimized_downtime_days += machine_optimized_days
         baseline_downtime_days += machine_baseline_days
         baseline_per_machine_days[profile.machine_name] = round(machine_baseline_days, 4)
 
-        schedule.append(
-            ScheduleItem(
-                machine=profile.machine_name,
-                day=_day_label(selected_day, horizon),
-                time=TIME_LABEL,
-                machine_id=profile.machine_id,
-                day_index=selected_day,
-                maintenance_duration_days=profile.pm_duration_days,
-                expected_downtime_hours=round(machine_optimized_days * 24.0, 2),
-                estimated_cost_impact=round(machine_cost, 2),
+        for selected_day in selected_days:
+            task_downtime_days = float(profile.pm_duration_days)
+            task_cost = task_downtime_days * 24.0 * profile.downtime_cost_per_hour
+            schedule.append(
+                ScheduleItem(
+                    machine=profile.machine_name,
+                    day=_day_label(selected_day, horizon),
+                    time=TIME_LABEL,
+                    machine_id=profile.machine_id,
+                    day_index=selected_day,
+                    maintenance_duration_days=profile.pm_duration_days,
+                    expected_downtime_hours=round(task_downtime_days * 24.0, 2),
+                    estimated_cost_impact=round(task_cost, 2),
+                )
             )
-        )
+
+    schedule.sort(key=lambda item: ((item.day_index or 0), item.machine_id or 0))
 
     improvement_percent = 0.0
     if baseline_downtime_days > 0:
