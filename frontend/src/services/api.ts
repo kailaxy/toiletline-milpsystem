@@ -1,4 +1,14 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const LOCAL_DEMO_MODE = String(import.meta.env.VITE_LOCAL_DEMO_MODE || '').toLowerCase() === 'true';
+
+const isLocalhostApiBase = (baseUrl: string): boolean => {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+  }
+};
 
 export interface Machine {
   id: number;
@@ -59,6 +69,74 @@ export interface OptimizeResponse {
   schedule: ScheduleItem[];
   kpis: KPIResponse;
 }
+
+const parseApiErrorMessage = async (res: Response, fallbackPrefix: string): Promise<string> => {
+  const defaultMessage = `${fallbackPrefix} (${res.status} ${res.statusText})`;
+
+  try {
+    const contentType = res.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const payload = await res.json();
+      const detail = payload?.detail ?? payload?.message ?? payload?.error;
+
+      if (typeof detail === 'string' && detail.trim().length > 0) {
+        return detail;
+      }
+
+      if (Array.isArray(detail) && detail.length > 0) {
+        const normalized = detail
+          .map((item: any) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object') {
+              const location = Array.isArray(item.loc) ? item.loc.join('.') : '';
+              const message = typeof item.msg === 'string' ? item.msg : JSON.stringify(item);
+              return location ? `${location}: ${message}` : message;
+            }
+            return String(item);
+          })
+          .filter(Boolean)
+          .join('; ');
+
+        if (normalized.length > 0) {
+          return normalized;
+        }
+      }
+
+      if (detail && typeof detail === 'object') {
+        return JSON.stringify(detail);
+      }
+
+      if (payload && typeof payload === 'object') {
+        return JSON.stringify(payload);
+      }
+    }
+
+    const textBody = (await res.text()).trim();
+    if (textBody.length > 0) {
+      return textBody;
+    }
+  } catch {
+    // Fall through to default error message.
+  }
+
+  return defaultMessage;
+};
+
+const getDemoOptimizationResult = (params: OptimizeRequest): Promise<OptimizeResponse> => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        schedule: [
+          { machine: 'Log Saw', day: 'Day 1', time: '08:00', machine_id: 4, day_index: 0, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
+          { machine: 'Accumulator', day: 'Day 3', time: '08:00', machine_id: 2, day_index: 2, maintenance_duration_days: 1, expected_downtime_hours: 6, estimated_cost_impact: 10800 },
+          { machine: 'Log Saw 2', day: 'Day 5', time: '08:00', machine_id: 5, day_index: 4, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
+        ],
+        kpis: { predicted_downtime: 30.0, availability: 95.8, predicted_downtime_hours: 30.0, fleet_availability: 95.8, horizon_days: params.horizon_days }
+      });
+    }, 1200);
+  });
+};
 
 // Fallback Data for Tissue Production MVP
 const DEMO_MACHINES: Machine[] = [
@@ -189,25 +267,26 @@ export const runOptimization = async (params: OptimizeRequest): Promise<Optimize
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params)
     });
-    if (res.ok) {
-      return await res.json();
+    if (!res.ok) {
+      const message = await parseApiErrorMessage(res, 'Optimization request failed');
+      throw new Error(message);
     }
+    return await res.json();
   } catch (e) {
-    console.warn('Backend unavailable or failed, using fallback optimization data');
-  }
+    const isUnreachable = e instanceof TypeError;
+    const canUseDemoFallback = isUnreachable && LOCAL_DEMO_MODE && isLocalhostApiBase(API_BASE);
 
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        schedule: [
-          { machine: 'Log Saw', day: 'Day 1', time: '08:00', machine_id: 4, day_index: 0, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
-          { machine: 'Accumulator', day: 'Day 3', time: '08:00', machine_id: 2, day_index: 2, maintenance_duration_days: 1, expected_downtime_hours: 6, estimated_cost_impact: 10800 },
-          { machine: 'Log Saw 2', day: 'Day 5', time: '08:00', machine_id: 5, day_index: 4, maintenance_duration_days: 2, expected_downtime_hours: 12, estimated_cost_impact: 36000 },
-        ],
-        kpis: { predicted_downtime: 30.0, availability: 95.8, predicted_downtime_hours: 30.0, fleet_availability: 95.8, horizon_days: params.horizon_days }
-      });
-    }, 1200);
-  });
+    if (canUseDemoFallback) {
+      console.warn('Backend unreachable in local demo mode, using fallback optimization data');
+      return getDemoOptimizationResult(params);
+    }
+
+    if (e instanceof Error) {
+      throw e;
+    }
+
+    throw new Error('Optimization failed due to an unknown error');
+  }
 };
 
 export const createMachine = async (machine: Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>): Promise<Machine> => {

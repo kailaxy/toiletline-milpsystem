@@ -6,25 +6,49 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export default function Optimization() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   const [horizonDays, setHorizonDays] = useState(7);
   const [capacity, setCapacity] = useState(2);
   const [avoidPeak, setAvoidPeak] = useState(true);
 
-  const handleOptimize = async () => {
-    setLoading(true);
-    const res = await runOptimization({ 
-      horizon_days: horizonDays, 
-      maintenance_capacity_per_day: capacity,
-      peak_day_indices: [1, 2], // Mon, Tue demo
-      avoid_peak_days: avoidPeak
-    });
-    setResult(res);
-    setLoading(false);
+  const clampInt = (value: number, min: number, max: number) => {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(max, Math.max(min, Math.trunc(value)));
   };
 
+  const handleOptimize = async () => {
+    const boundedHorizon = clampInt(horizonDays, 1, 30);
+    const boundedCapacity = clampInt(capacity, 1, 2);
+
+    if (boundedHorizon !== horizonDays) setHorizonDays(boundedHorizon);
+    if (boundedCapacity !== capacity) setCapacity(boundedCapacity);
+
+    setApiError(null);
+    setLoading(true);
+
+    try {
+      const res = await runOptimization({ 
+        horizon_days: boundedHorizon,
+        maintenance_capacity_per_day: boundedCapacity,
+        peak_day_indices: [1, 2], // Mon, Tue demo
+        avoid_peak_days: avoidPeak
+      });
+      setResult(res);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Optimization failed. Please try again.';
+      setApiError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const effectiveHorizon = result?.kpis.horizon_days && result.kpis.horizon_days > 0
+    ? result.kpis.horizon_days
+    : horizonDays;
+
   // Convert schedule to chart data
-  const chartData = Array.from({ length: horizonDays }, (_, i) => {
+  const chartData = Array.from({ length: effectiveHorizon }, (_, i) => {
     const targetDayIndex = i;
     const machinesOnDay = result?.schedule.filter(s => 
       (s.day_index ?? -1) === targetDayIndex || 
@@ -47,11 +71,11 @@ export default function Optimization() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
            <div className="space-y-1">
              <label className="block text-sm font-medium text-slate-700">Horizon (Days)</label>
-             <input type="number" value={horizonDays} onChange={e => setHorizonDays(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+             <input type="number" min={1} max={30} value={horizonDays} onChange={e => setHorizonDays(clampInt(Number(e.target.value), 1, 30))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
            </div>
            <div className="space-y-1">
              <label className="block text-sm font-medium text-slate-700">Daily Capacity</label>
-             <input type="number" value={capacity} onChange={e => setCapacity(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+             <input type="number" min={1} max={2} value={capacity} onChange={e => setCapacity(clampInt(Number(e.target.value), 1, 2))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
            </div>
            <div className="space-y-1 pb-2 flex items-center gap-2">
              <input type="checkbox" id="avoid" checked={avoidPeak} onChange={e => setAvoidPeak(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
@@ -65,6 +89,10 @@ export default function Optimization() {
              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Run Optimizer'}
            </button>
         </div>
+
+        {apiError && (
+          <p className="mt-4 text-sm font-medium text-red-600">{apiError}</p>
+        )}
       </div>
 
       {result && (
@@ -76,6 +104,8 @@ export default function Optimization() {
                 SOLUTION FOUND
               </span>
             </h2>
+
+            <p className="text-sm text-slate-500 mb-6">Horizon Used: {effectiveHorizon} day{effectiveHorizon === 1 ? '' : 's'}</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-6 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
