@@ -7,8 +7,8 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
 
   // Machine state
   const [machineName, setMachineName] = useState('');
-  const [mttf, setMttf] = useState(500);
-  const [mttr, setMttr] = useState(8);
+  const [mttfMinutes, setMttfMinutes] = useState(30000);
+  const [mttrMinutes, setMttrMinutes] = useState(480);
   const [costPerHour, setCostPerHour] = useState(2500);
   const [lastMaint, setLastMaint] = useState(15);
 
@@ -32,8 +32,8 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
     try {
       await createMachine({
         name: machineName,
-        mttf_hours: mttf,
-        mttr_hours: mttr,
+        mttf_minutes: mttfMinutes,
+        mttr_minutes: mttrMinutes,
         downtime_cost_per_hour: costPerHour,
         last_maintenance_days_ago: lastMaint
       });
@@ -113,12 +113,14 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
              <input type="text" value={machineName} onChange={e => setMachineName(e.target.value)} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="e.g., Rewinder 2" required />
           </div>
           <div className="space-y-1">
-             <label className="block text-sm font-medium text-slate-700">MTTF (hours)</label>
-             <input type="number" value={mttf} onChange={e => setMttf(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none" required />
+             <label className="block text-sm font-medium text-slate-700">MTTF (minutes)</label>
+             <input type="number" min={1} value={mttfMinutes} onChange={e => setMttfMinutes(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none" required />
+             <p className="text-xs text-slate-500">Mean time to failure in minutes (e.g., 30000 for 500 hours).</p>
           </div>
           <div className="space-y-1">
-             <label className="block text-sm font-medium text-slate-700">MTTR (hours)</label>
-             <input type="number" value={mttr} onChange={e => setMttr(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none" required />
+             <label className="block text-sm font-medium text-slate-700">MTTR (minutes)</label>
+             <input type="number" min={1} value={mttrMinutes} onChange={e => setMttrMinutes(Number(e.target.value))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none" required />
+             <p className="text-xs text-slate-500">Mean time to repair in minutes (e.g., 480 for 8 hours).</p>
           </div>
           <div className="space-y-1">
              <label className="block text-sm font-medium text-slate-700">Downtime Cost (PHP/hr)</label>

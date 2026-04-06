@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMachineColor, runOptimization, OptimizeResponse, ScheduleItem } from '../services/api';
+import { getLatestOptimizationResponse, getMachineColor, OptimizeResponse, ScheduleItem } from '../services/api';
 import { CalendarDays, Settings, Clock, CheckCircle } from 'lucide-react';
 
 const formatDuration = (task: ScheduleItem): string => {
@@ -18,35 +18,112 @@ const formatDuration = (task: ScheduleItem): string => {
   return 'N/A';
 };
 
-const formatDowntimeHours = (hours: number | null | undefined): string => {
-  if (hours == null) {
-    return '-';
+const hasValue = (value: string | null | undefined): value is string => {
+  return typeof value === 'string' && value.trim().length > 0;
+};
+
+const toSortableNumber = (value: number | null | undefined): number | null => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+const compareScheduleItems = (a: ScheduleItem, b: ScheduleItem): number => {
+  const dayIndexA = toSortableNumber(a.day_index);
+  const dayIndexB = toSortableNumber(b.day_index);
+  const normalizedDayIndexA = dayIndexA ?? Number.MAX_SAFE_INTEGER;
+  const normalizedDayIndexB = dayIndexB ?? Number.MAX_SAFE_INTEGER;
+
+  if (normalizedDayIndexA !== normalizedDayIndexB) {
+    return normalizedDayIndexA - normalizedDayIndexB;
   }
-  return hours.toFixed(2);
+
+  const slotIndexA = toSortableNumber(a.slot_index);
+  const slotIndexB = toSortableNumber(b.slot_index);
+
+  if (slotIndexA != null || slotIndexB != null) {
+    const normalizedSlotIndexA = slotIndexA ?? Number.MAX_SAFE_INTEGER;
+    const normalizedSlotIndexB = slotIndexB ?? Number.MAX_SAFE_INTEGER;
+
+    if (normalizedSlotIndexA !== normalizedSlotIndexB) {
+      return normalizedSlotIndexA - normalizedSlotIndexB;
+    }
+  }
+
+  const dayTextComparison = a.day.localeCompare(b.day);
+  if (dayTextComparison !== 0) {
+    return dayTextComparison;
+  }
+
+  const timeTextComparison = a.time.localeCompare(b.time);
+  if (timeTextComparison !== 0) {
+    return timeTextComparison;
+  }
+
+  return 0;
+};
+
+const getScheduledTimeLabels = (task: ScheduleItem): { primary: string; secondary: string } => {
+  const hasSlotMetadata = hasValue(task.start_datetime_label) || hasValue(task.slot_label) || task.slot_in_day != null;
+
+  if (!hasSlotMetadata) {
+    return {
+      primary: task.day,
+      secondary: task.time,
+    };
+  }
+
+  const primary = hasValue(task.start_datetime_label) ? task.start_datetime_label : task.day;
+
+  if (hasValue(task.slot_label)) {
+    return {
+      primary,
+      secondary: task.slot_label,
+    };
+  }
+
+  if (task.slot_in_day != null) {
+    return {
+      primary,
+      secondary: `Slot ${task.slot_in_day + 1}`,
+    };
+  }
+
+  return {
+    primary,
+    secondary: task.time,
+  };
 };
 
 export default function Schedule() {
   const [schedule, setSchedule] = useState<OptimizeResponse['schedule']>([]);
+  const [hasCachedOptimization, setHasCachedOptimization] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For MVP demo, call optimization with default params to fetch a schedule
-    runOptimization({ 
-      horizon_days: 7, 
-      maintenance_capacity_per_day: 2, 
-      peak_day_indices: [], 
-      avoid_peak_days: false 
-    }).then(res => {
-      // Sort schedule by day_index if available, otherwise by day string
-      const sorted = res.schedule.sort((a, b) => {
-        if (a.day_index != null && b.day_index != null) {
-          return a.day_index - b.day_index;
-        }
-        return a.day.localeCompare(b.day);
-      });
-      setSchedule(sorted);
+    const latestOptimization = getLatestOptimizationResponse();
+
+    if (!latestOptimization) {
+      setHasCachedOptimization(false);
+      setSchedule([]);
       setLoading(false);
-    });
+      return;
+    }
+
+    // Use deterministic ordering: day index, then slot index, then legacy text fields.
+    const sorted = latestOptimization.schedule
+      .map((task, originalIndex) => ({ task, originalIndex }))
+      .sort((a, b) => {
+        const primaryComparison = compareScheduleItems(a.task, b.task);
+        if (primaryComparison !== 0) {
+          return primaryComparison;
+        }
+
+        return a.originalIndex - b.originalIndex;
+      })
+      .map(({ task }) => task);
+
+    setHasCachedOptimization(true);
+    setSchedule(sorted);
+    setLoading(false);
   }, []);
 
   return (
@@ -70,29 +147,38 @@ export default function Schedule() {
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">Machine</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Scheduled Time</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Duration</th>
-                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Est. Downtime (hrs)</th>
                 <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Cost Impact</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-500">
+                  <td colSpan={4} className="p-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                      <p>Calculating optimal schedule...</p>
+                      <p>Loading schedule...</p>
                     </div>
+                  </td>
+                </tr>
+              ) : !hasCachedOptimization ? (
+                <tr>
+                  <td colSpan={4} className="p-12 text-center text-slate-500 flex flex-col items-center">
+                    <CalendarDays className="w-10 h-10 text-slate-400 mb-3" />
+                    No optimization result is available yet. Run an optimization first to view the generated schedule.
                   </td>
                 </tr>
               ) : schedule.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-slate-500 flex flex-col items-center">
+                  <td colSpan={4} className="p-12 text-center text-slate-500 flex flex-col items-center">
                     <CheckCircle className="w-10 h-10 text-green-500 mb-3" />
-                    No scheduled maintenance required inside the current horizon.
+                    No scheduled maintenance required inside the optimized horizon.
                   </td>
                 </tr>
               ) : (
-                schedule.map((task, idx) => (
+                schedule.map((task, idx) => {
+                  const scheduledTimeLabels = getScheduledTimeLabels(task);
+
+                  return (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
@@ -104,11 +190,11 @@ export default function Schedule() {
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2 text-slate-600 font-medium">
                           <CalendarDays className="h-4 w-4 text-slate-400" />
-                          {task.day}
+                          {scheduledTimeLabels.primary}
                         </div>
                         <div className="flex items-center gap-2 text-slate-500 text-sm mt-1">
                           <Clock className="h-4 w-4 text-slate-400" />
-                          {task.time}
+                          {scheduledTimeLabels.secondary}
                         </div>
                       </div>
                     </td>
@@ -117,14 +203,11 @@ export default function Schedule() {
                         {formatDuration(task)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-amber-600">
-                      {task.expected_downtime_hours != null ? formatDowntimeHours(task.expected_downtime_hours) : <span className="text-slate-300 font-normal">-</span>}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-red-600">
                       {task.estimated_cost_impact != null ? `PHP ${task.estimated_cost_impact.toLocaleString()}` : <span className="text-slate-300 font-normal">-</span>}
                     </td>
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>

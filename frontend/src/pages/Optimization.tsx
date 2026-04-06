@@ -47,17 +47,82 @@ export default function Optimization() {
     ? result.kpis.horizon_days
     : horizonDays;
 
+  const hasSlotAwareSchedule = Boolean(
+    result && (
+      (result.kpis.horizon_slots ?? 0) > 0 ||
+      (result.kpis.slots_per_day ?? 0) > 0 ||
+      result.schedule.some(item =>
+        item.slot_index !== null && item.slot_index !== undefined ||
+        item.slot_in_day !== null && item.slot_in_day !== undefined ||
+        Boolean(item.slot_label) ||
+        Boolean(item.start_datetime_label)
+      )
+    )
+  );
+
+  const slotsPerDay = result?.kpis.slots_per_day && result.kpis.slots_per_day > 0
+    ? Math.trunc(result.kpis.slots_per_day)
+    : null;
+
+  const getSlotIndex = (item: OptimizeResponse['schedule'][number]): number | null => {
+    if (item.slot_index !== null && item.slot_index !== undefined) {
+      return Math.trunc(item.slot_index);
+    }
+
+    if (
+      slotsPerDay &&
+      slotsPerDay > 0 &&
+      item.day_index !== null &&
+      item.day_index !== undefined &&
+      item.slot_in_day !== null &&
+      item.slot_in_day !== undefined
+    ) {
+      return Math.trunc(item.day_index) * slotsPerDay + Math.trunc(item.slot_in_day);
+    }
+
+    return null;
+  };
+
+  const effectiveTimelineUnits = hasSlotAwareSchedule
+    ? result?.kpis.horizon_slots && result.kpis.horizon_slots > 0
+      ? Math.trunc(result.kpis.horizon_slots)
+      : slotsPerDay && slotsPerDay > 0
+        ? effectiveHorizon * slotsPerDay
+        : effectiveHorizon
+    : effectiveHorizon;
+
   // Convert schedule to chart data
-  const chartData = Array.from({ length: effectiveHorizon }, (_, i) => {
-    const targetDayIndex = i;
-    const machinesOnDay = result?.schedule.filter(s => 
-      (s.day_index ?? -1) === targetDayIndex || 
-      (s.day_index ?? -1) <= targetDayIndex && (s.day_index ?? -1) + (s.maintenance_duration_days || 1) > targetDayIndex
-    ) || [];
+  const chartData = Array.from({ length: effectiveTimelineUnits }, (_, i) => {
+    const matchingSlotItems = hasSlotAwareSchedule
+      ? result?.schedule.filter(item => getSlotIndex(item) === i) || []
+      : [];
+
+    const machinesInBucket = hasSlotAwareSchedule
+      ? matchingSlotItems
+      : result?.schedule.filter(s =>
+          (s.day_index ?? -1) === i ||
+          (s.day_index ?? -1) <= i && (s.day_index ?? -1) + (s.maintenance_duration_days || 1) > i
+        ) || [];
+
+    const axisLabel = hasSlotAwareSchedule
+      ? slotsPerDay && slotsPerDay > 0
+        ? `D${Math.floor(i / slotsPerDay) + 1} S${(i % slotsPerDay) + 1}`
+        : `S${i + 1}`
+      : `Day ${i + 1}`;
+
+    const slotTitle = hasSlotAwareSchedule
+      ? matchingSlotItems.find(item => item.start_datetime_label)?.start_datetime_label
+        || matchingSlotItems.find(item => item.slot_label)?.slot_label
+        || (slotsPerDay && slotsPerDay > 0
+          ? `Day ${Math.floor(i / slotsPerDay) + 1} Slot ${(i % slotsPerDay) + 1}`
+          : `Slot ${i + 1}`)
+      : `Day ${i + 1}`;
+
     return {
-      day: `Day ${i + 1}`,
-      count: machinesOnDay.length,
-      machineNames: machinesOnDay.map(m => m.machine)
+      bucket: axisLabel,
+      title: slotTitle,
+      count: machinesInBucket.length,
+      machineNames: machinesInBucket.map(m => m.machine)
     };
   });
 
@@ -134,7 +199,9 @@ export default function Optimization() {
 
           {/* Machine vs Time Slot Visualization */}
           <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-96 flex flex-col">
-            <h2 className="text-xl font-semibold mb-4 text-slate-800 shrink-0">Maintenance Load by Day</h2>
+            <h2 className="text-xl font-semibold mb-4 text-slate-800 shrink-0">
+              {hasSlotAwareSchedule ? 'Maintenance Load by Slot' : 'Maintenance Load by Day'}
+            </h2>
             <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-600">
               {legendMachineNames.map((machineName) => (
                 <div key={machineName} className="flex items-center gap-2">
@@ -147,7 +214,7 @@ export default function Optimization() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748B'}} />
+                  <XAxis dataKey="bucket" axisLine={false} tickLine={false} tick={{fill: '#64748B'}} />
                   <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748B'}} />
                   <Tooltip 
                     cursor={{ fill: '#F1F5F9' }} 
@@ -156,7 +223,7 @@ export default function Optimization() {
                         const d = payload[0].payload;
                         return (
                           <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg text-sm">
-                            <p className="font-semibold text-slate-800 mb-1">{d.day}</p>
+                            <p className="font-semibold text-slate-800 mb-1">{d.title}</p>
                             <p className="text-slate-600">Machines: {d.count}</p>
                             {Array.isArray(d.machineNames) && d.machineNames.length > 0 && (
                               <div className="mt-1 text-xs space-y-1">

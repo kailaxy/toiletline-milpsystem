@@ -14,6 +14,8 @@ export interface Machine {
   id: number;
   name: string;
   created_at?: string;
+  mttf_minutes?: number;
+  mttr_minutes?: number;
   mttf_hours?: number;
   mttr_hours?: number;
   downtime_cost_per_hour?: number;
@@ -39,6 +41,7 @@ export interface MaintenanceMetrics {
 
 export interface OptimizeRequest {
   horizon_days: number;
+  slots_per_day?: number;
   maintenance_capacity_per_day: number;
   peak_day_indices: number[];
   avoid_peak_days: boolean;
@@ -50,6 +53,10 @@ export interface ScheduleItem {
   machine: string;
   day: string;
   time: string;
+  slot_index?: number | null;
+  slot_in_day?: number | null;
+  slot_label?: string | null;
+  start_datetime_label?: string | null;
   machine_id?: number | null;
   day_index?: number | null;
   maintenance_duration_days?: number | null;
@@ -83,12 +90,24 @@ export interface KPIResponse {
   predicted_downtime_hours?: number | null;
   fleet_availability?: number | null;
   horizon_days?: number | null;
+  slots_per_day?: number | null;
+  horizon_slots?: number | null;
+  [key: string]: number | null | undefined;
 }
 
 export interface OptimizeResponse {
   schedule: ScheduleItem[];
   kpis: KPIResponse;
 }
+
+const MINUTES_PER_HOUR = 60;
+const OPTIMIZATION_CACHE_KEY = 'milp.latestOptimizationSnapshot.v2';
+
+type OptimizationSnapshot = {
+  request: OptimizeRequest;
+  response: OptimizeResponse;
+  saved_at: string;
+};
 
 const parseApiErrorMessage = async (res: Response, fallbackPrefix: string): Promise<string> => {
   const defaultMessage = `${fallbackPrefix} (${res.status} ${res.statusText})`;
@@ -143,16 +162,145 @@ const parseApiErrorMessage = async (res: Response, fallbackPrefix: string): Prom
   return defaultMessage;
 };
 
+const getSafeStorage = (): Storage | null => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readOptimizationSnapshot = (): OptimizationSnapshot | null => {
+  const storage = getSafeStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const raw = storage.getItem(OPTIMIZATION_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const candidate = parsed as Partial<OptimizationSnapshot>;
+    if (!candidate.request || !candidate.response) {
+      return null;
+    }
+
+    return {
+      request: candidate.request,
+      response: candidate.response,
+      saved_at: typeof candidate.saved_at === 'string' ? candidate.saved_at : '',
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeOptimizationSnapshot = (request: OptimizeRequest, response: OptimizeResponse): void => {
+  const storage = getSafeStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const snapshot: OptimizationSnapshot = {
+      request,
+      response,
+      saved_at: new Date().toISOString(),
+    };
+    storage.setItem(OPTIMIZATION_CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignore cache failures and keep request flow unaffected.
+  }
+};
+
+export const getLatestOptimizationRequest = (): OptimizeRequest | null => {
+  const snapshot = readOptimizationSnapshot();
+  return snapshot ? snapshot.request : null;
+};
+
+export const getLatestOptimizationResponse = (): OptimizeResponse | null => {
+  const snapshot = readOptimizationSnapshot();
+  return snapshot ? snapshot.response : null;
+};
+
 const getDemoOptimizationResult = (params: OptimizeRequest): Promise<OptimizeResponse> => {
   return new Promise((resolve) => {
     setTimeout(() => {
+      const slotsPerDay = typeof params.slots_per_day === 'number' && Number.isFinite(params.slots_per_day)
+        ? params.slots_per_day
+        : null;
+      const horizonSlots = slotsPerDay !== null ? params.horizon_days * slotsPerDay : null;
+
       resolve({
         schedule: [
-          { machine: 'Log Saw', day: 'Day 1', time: '08:00', machine_id: 4, day_index: 0, maintenance_duration_days: 1, maintenance_duration_hours: 8.4, maintenance_duration_minutes: 504, expected_downtime_hours: 8.4, estimated_cost_impact: 25200 },
-          { machine: 'Accumulator', day: 'Day 3', time: '08:00', machine_id: 2, day_index: 2, maintenance_duration_days: 1, maintenance_duration_hours: 4.2, maintenance_duration_minutes: 252, expected_downtime_hours: 4.2, estimated_cost_impact: 7560 },
-          { machine: 'Log Saw 2', day: 'Day 5', time: '08:00', machine_id: 5, day_index: 4, maintenance_duration_days: 1, maintenance_duration_hours: 8.4, maintenance_duration_minutes: 504, expected_downtime_hours: 8.4, estimated_cost_impact: 25200 },
+          {
+            machine: 'Log Saw',
+            day: 'Day 1',
+            time: '08:00',
+            slot_index: 0,
+            slot_in_day: 0,
+            slot_label: 'Day 1 Slot 1',
+            start_datetime_label: 'Day 1 08:00',
+            machine_id: 4,
+            day_index: 0,
+            maintenance_duration_days: 1,
+            maintenance_duration_hours: 8.4,
+            maintenance_duration_minutes: 504,
+            expected_downtime_hours: 8.4,
+            estimated_cost_impact: 25200,
+          },
+          {
+            machine: 'Accumulator',
+            day: 'Day 3',
+            time: '08:00',
+            slot_index: 2,
+            slot_in_day: 0,
+            slot_label: 'Day 3 Slot 1',
+            start_datetime_label: 'Day 3 08:00',
+            machine_id: 2,
+            day_index: 2,
+            maintenance_duration_days: 1,
+            maintenance_duration_hours: 4.2,
+            maintenance_duration_minutes: 252,
+            expected_downtime_hours: 4.2,
+            estimated_cost_impact: 7560,
+          },
+          {
+            machine: 'Log Saw 2',
+            day: 'Day 5',
+            time: '08:00',
+            slot_index: 4,
+            slot_in_day: 0,
+            slot_label: 'Day 5 Slot 1',
+            start_datetime_label: 'Day 5 08:00',
+            machine_id: 5,
+            day_index: 4,
+            maintenance_duration_days: 1,
+            maintenance_duration_hours: 8.4,
+            maintenance_duration_minutes: 504,
+            expected_downtime_hours: 8.4,
+            estimated_cost_impact: 25200,
+          },
         ],
-        kpis: { predicted_downtime: 21.0, availability: 95.8, predicted_downtime_hours: 21.0, fleet_availability: 95.8, horizon_days: params.horizon_days }
+        kpis: {
+          predicted_downtime: 21.0,
+          availability: 95.8,
+          predicted_downtime_hours: 21.0,
+          fleet_availability: 95.8,
+          horizon_days: params.horizon_days,
+          slots_per_day: slotsPerDay,
+          horizon_slots: horizonSlots,
+        }
       });
     }, 1200);
   });
@@ -160,12 +308,12 @@ const getDemoOptimizationResult = (params: OptimizeRequest): Promise<OptimizeRes
 
 // Fallback Data for Tissue Production MVP
 const DEMO_MACHINES: Machine[] = [
-  { id: 1, name: 'Rewinder', created_at: new Date().toISOString(), mttf_hours: 500, mttr_hours: 8, downtime_cost_per_hour: 2500, last_maintenance_days_ago: 15, status: 'running', reliabilityScore: 89 },
-  { id: 2, name: 'Accumulator', created_at: new Date().toISOString(), mttf_hours: 450, mttr_hours: 6, downtime_cost_per_hour: 1800, last_maintenance_days_ago: 30, status: 'preventive', reliabilityScore: 75 },
-  { id: 3, name: 'Distributor', created_at: new Date().toISOString(), mttf_hours: 600, mttr_hours: 4, downtime_cost_per_hour: 1500, last_maintenance_days_ago: 10, status: 'running', reliabilityScore: 92 },
-  { id: 4, name: 'Log Saw', created_at: new Date().toISOString(), mttf_hours: 350, mttr_hours: 12, downtime_cost_per_hour: 3000, last_maintenance_days_ago: 45, status: 'down', reliabilityScore: 60 },
-  { id: 5, name: 'Log Saw 2', created_at: new Date().toISOString(), mttf_hours: 350, mttr_hours: 12, downtime_cost_per_hour: 3000, last_maintenance_days_ago: 20, status: 'running', reliabilityScore: 82 },
-  { id: 6, name: 'Packaging', created_at: new Date().toISOString(), mttf_hours: 700, mttr_hours: 5, downtime_cost_per_hour: 2000, last_maintenance_days_ago: 5, status: 'running', reliabilityScore: 96 }
+  { id: 1, name: 'Rewinder', created_at: new Date().toISOString(), mttf_minutes: 30000, mttr_minutes: 480, mttf_hours: 500, mttr_hours: 8, downtime_cost_per_hour: 2500, last_maintenance_days_ago: 15, status: 'running', reliabilityScore: 89 },
+  { id: 2, name: 'Accumulator', created_at: new Date().toISOString(), mttf_minutes: 27000, mttr_minutes: 360, mttf_hours: 450, mttr_hours: 6, downtime_cost_per_hour: 1800, last_maintenance_days_ago: 30, status: 'preventive', reliabilityScore: 75 },
+  { id: 3, name: 'Distributor', created_at: new Date().toISOString(), mttf_minutes: 36000, mttr_minutes: 240, mttf_hours: 600, mttr_hours: 4, downtime_cost_per_hour: 1500, last_maintenance_days_ago: 10, status: 'running', reliabilityScore: 92 },
+  { id: 4, name: 'Log Saw', created_at: new Date().toISOString(), mttf_minutes: 21000, mttr_minutes: 720, mttf_hours: 350, mttr_hours: 12, downtime_cost_per_hour: 3000, last_maintenance_days_ago: 45, status: 'down', reliabilityScore: 60 },
+  { id: 5, name: 'Log Saw 2', created_at: new Date().toISOString(), mttf_minutes: 21000, mttr_minutes: 720, mttf_hours: 350, mttr_hours: 12, downtime_cost_per_hour: 3000, last_maintenance_days_ago: 20, status: 'running', reliabilityScore: 82 },
+  { id: 6, name: 'Packaging', created_at: new Date().toISOString(), mttf_minutes: 42000, mttr_minutes: 300, mttf_hours: 700, mttr_hours: 5, downtime_cost_per_hour: 2000, last_maintenance_days_ago: 5, status: 'running', reliabilityScore: 96 }
 ];
 
 const DEMO_METRICS: MaintenanceMetrics = {
@@ -193,9 +341,72 @@ const toFiniteNumber = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+const hoursToMinutes = (hours: number): number => hours * MINUTES_PER_HOUR;
+const minutesToHours = (minutes: number): number => minutes / MINUTES_PER_HOUR;
+
+const toMinutesFromPayload = (machine: any, minuteKey: 'mttf_minutes' | 'mttr_minutes', hourKey: 'mttf_hours' | 'mttr_hours'): number | undefined => {
+  const minutes = toFiniteNumber(machine?.[minuteKey]);
+  if (minutes !== null) {
+    return minutes;
+  }
+
+  const hours = toFiniteNumber(machine?.[hourKey]);
+  if (hours !== null) {
+    return hoursToMinutes(hours);
+  }
+
+  return undefined;
+};
+
+const normalizeMachinePayload = (machine: any): Machine => {
+  const mttf_minutes = toMinutesFromPayload(machine, 'mttf_minutes', 'mttf_hours');
+  const mttr_minutes = toMinutesFromPayload(machine, 'mttr_minutes', 'mttr_hours');
+  const health = deriveMachineHealth({ ...machine, mttf_minutes, mttr_minutes });
+  const mttf_hours = mttf_minutes === undefined ? undefined : minutesToHours(mttf_minutes);
+  const mttr_hours = mttr_minutes === undefined ? undefined : minutesToHours(mttr_minutes);
+
+  return {
+    id: Number(machine?.id),
+    name: String(machine?.name || ''),
+    created_at: machine?.created_at,
+    mttf_minutes,
+    mttr_minutes,
+    mttf_hours,
+    mttr_hours,
+    downtime_cost_per_hour: toFiniteNumber(machine?.downtime_cost_per_hour) ?? undefined,
+    last_maintenance_days_ago: toFiniteNumber(machine?.last_maintenance_days_ago) ?? undefined,
+    status: health.status,
+    reliabilityScore: health.reliabilityScore,
+  };
+};
+
+const toBackendMachinePayload = (
+  machine: Partial<Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>>
+): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {
+    ...machine,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(machine, 'mttf_minutes')) {
+    const value = toFiniteNumber(machine.mttf_minutes);
+    payload.mttf_hours = value === null ? undefined : minutesToHours(value);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(machine, 'mttr_minutes')) {
+    const value = toFiniteNumber(machine.mttr_minutes);
+    payload.mttr_hours = value === null ? undefined : minutesToHours(value);
+  }
+
+  delete payload.mttf_minutes;
+  delete payload.mttr_minutes;
+
+  return payload;
+};
+
 const deriveMachineHealth = (machine: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
   const ageDays = toFiniteNumber(machine?.last_maintenance_days_ago);
-  const mttfHours = toFiniteNumber(machine?.mttf_hours);
+  const mttfMinutes = toMinutesFromPayload(machine, 'mttf_minutes', 'mttf_hours');
+  const mttfHours = mttfMinutes !== undefined ? minutesToHours(mttfMinutes) : null;
 
   // Fallback path when core reliability inputs are missing.
   if (ageDays === null || mttfHours === null || mttfHours <= 0) {
@@ -223,14 +434,7 @@ export const fetchMachines = async (): Promise<Machine[]> => {
     const res = await fetch(`${API_BASE}/machines`);
     if (res.ok) {
       const data = await res.json();
-      return data.map((d: any) => {
-        const health = deriveMachineHealth(d);
-        return {
-          ...d,
-          status: health.status,
-          reliabilityScore: health.reliabilityScore,
-        };
-      });
+      return data.map((d: any) => normalizeMachinePayload(d));
     }
   } catch (e) {
     console.warn('Backend unavailable, using fallback machines data');
@@ -291,14 +495,18 @@ export const runOptimization = async (params: OptimizeRequest): Promise<Optimize
       const message = await parseApiErrorMessage(res, 'Optimization request failed');
       throw new Error(message);
     }
-    return await res.json();
+    const response: OptimizeResponse = await res.json();
+    writeOptimizationSnapshot(params, response);
+    return response;
   } catch (e) {
     const isUnreachable = e instanceof TypeError;
     const canUseDemoFallback = isUnreachable && LOCAL_DEMO_MODE && isLocalhostApiBase(API_BASE);
 
     if (canUseDemoFallback) {
       console.warn('Backend unreachable in local demo mode, using fallback optimization data');
-      return getDemoOptimizationResult(params);
+      const response = await getDemoOptimizationResult(params);
+      writeOptimizationSnapshot(params, response);
+      return response;
     }
 
     if (e instanceof Error) {
@@ -313,10 +521,11 @@ export const createMachine = async (machine: Omit<Machine, 'id' | 'created_at' |
   const res = await fetch(`${API_BASE}/machines`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(machine)
+    body: JSON.stringify(toBackendMachinePayload(machine))
   });
   if (!res.ok) throw new Error('Failed to create machine');
-  return res.json();
+  const data = await res.json();
+  return normalizeMachinePayload(data);
 };
 
 export const createMaintenanceData = async (data: Omit<MaintenanceData, 'id' | 'machine_name'>): Promise<MaintenanceData> => {
@@ -332,17 +541,19 @@ export const createMaintenanceData = async (data: Omit<MaintenanceData, 'id' | '
 export const getMachineById = async (id: number): Promise<Machine> => {
   const res = await fetch(`${API_BASE}/machines/${id}`);
   if (!res.ok) throw new Error('Failed to fetch machine');
-  return res.json();
+  const data = await res.json();
+  return normalizeMachinePayload(data);
 };
 
 export const updateMachine = async (id: number, machine: Partial<Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>>): Promise<Machine> => {
   const res = await fetch(`${API_BASE}/machines/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(machine)
+    body: JSON.stringify(toBackendMachinePayload(machine))
   });
   if (!res.ok) throw new Error('Failed to update machine');
-  return res.json();
+  const data = await res.json();
+  return normalizeMachinePayload(data);
 };
 
 export const deleteMachine = async (id: number): Promise<void> => {

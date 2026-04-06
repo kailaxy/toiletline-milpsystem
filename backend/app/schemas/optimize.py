@@ -11,6 +11,7 @@ class OptimizeRequest(BaseModel):
     )
     constraints: "OptimizationConstraints | None" = None
     horizon_days: int = Field(default=7, ge=1, le=30)
+    slots_per_day: int = Field(default=2, ge=1, le=24)
     maintenance_capacity_per_day: int = Field(default=2, ge=1, le=10)
     peak_day_indices: list[int] = Field(default_factory=list)
     avoid_peak_days: bool = True
@@ -22,6 +23,10 @@ class ScheduleItem(BaseModel):
     time: str
     machine_id: int | None = None
     day_index: int | None = None
+    slot_index: int | None = None
+    slot_in_day: int | None = None
+    slot_label: str | None = None
+    start_datetime_label: str | None = None
     maintenance_duration_days: int | None = None
     maintenance_duration_hours: float | None = None
     maintenance_duration_minutes: float | None = None
@@ -40,6 +45,8 @@ class KPIResponse(BaseModel):
     predicted_downtime_hours: float | None = None
     fleet_availability: float | None = None
     horizon_days: int | None = None
+    slots_per_day: int | None = None
+    horizon_slots: int | None = None
 
 
 class OptimizeResponse(BaseModel):

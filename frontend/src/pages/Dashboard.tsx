@@ -93,8 +93,8 @@ export default function Dashboard() {
                         <tr>
                             <th className="px-6 py-3 font-medium">Machine</th>
                             <th className="px-6 py-3 font-medium">Status</th>
-                            <th className="px-6 py-3 font-medium text-right">MTTF (hrs)</th>
-                            <th className="px-6 py-3 font-medium text-right">MTTR (hrs)</th>
+                          <th className="px-6 py-3 font-medium text-right">MTTF (min)</th>
+                          <th className="px-6 py-3 font-medium text-right">MTTR (min)</th>
                             <th className="px-6 py-3 font-medium text-right">Downtime Cost/hr</th>
                             <th className="px-6 py-3 font-medium">Reliability Score</th>
                         </tr>
@@ -111,8 +111,8 @@ export default function Dashboard() {
                                         {m.status.toUpperCase()}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-right text-slate-600">{m.mttf_hours ?? 'N/A'}</td>
-                                <td className="px-6 py-4 text-right text-slate-600">{m.mttr_hours ?? 'N/A'}</td>
+                                <td className="px-6 py-4 text-right text-slate-600">{m.mttf_minutes?.toLocaleString() ?? 'N/A'}</td>
+                                <td className="px-6 py-4 text-right text-slate-600">{m.mttr_minutes?.toLocaleString() ?? 'N/A'}</td>
                                 <td className="px-6 py-4 text-right text-slate-600">PHP {(m.downtime_cost_per_hour ?? 0).toLocaleString()}</td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">

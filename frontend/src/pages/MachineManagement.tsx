@@ -16,8 +16,8 @@ export default function MachineManagement() {
   const [isCreating, setIsCreating] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     name: '',
-    mttf_hours: 500,
-    mttr_hours: 8,
+    mttf_minutes: 30000,
+    mttr_minutes: 480,
     downtime_cost_per_hour: 1000,
     last_maintenance_days_ago: 0
   });
@@ -51,7 +51,7 @@ export default function MachineManagement() {
   const handleSaveEdit = async () => {
     if (!editingId) return;
     try {
-      const { id, created_at, status, reliabilityScore, ...payload } = editFormData as any;
+      const { id, created_at, status, reliabilityScore, mttf_hours, mttr_hours, ...payload } = editFormData as any;
       await updateMachine(editingId, payload);
       setSuccess('Machine updated successfully');
       setEditingId(null);
@@ -82,8 +82,8 @@ export default function MachineManagement() {
       setIsCreating(false);
       setCreateFormData({
         name: '',
-        mttf_hours: 500,
-        mttr_hours: 8,
+        mttf_minutes: 30000,
+        mttr_minutes: 480,
         downtime_cost_per_hour: 1000,
         last_maintenance_days_ago: 0
       });
@@ -130,12 +130,12 @@ export default function MachineManagement() {
               <input type="text" required value={createFormData.name} onChange={e => setCreateFormData({ ...createFormData, name: e.target.value })} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">MTTF (Hours)</label>
-              <input type="number" required min={1} value={createFormData.mttf_hours} onChange={e => setCreateFormData({ ...createFormData, mttf_hours: Number(e.target.value) })} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">MTTF (Minutes)</label>
+              <input type="number" required min={1} value={createFormData.mttf_minutes} onChange={e => setCreateFormData({ ...createFormData, mttf_minutes: Number(e.target.value) })} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">MTTR (Hours)</label>
-              <input type="number" required min={0} step={0.1} value={createFormData.mttr_hours} onChange={e => setCreateFormData({ ...createFormData, mttr_hours: Number(e.target.value) })} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">MTTR (Minutes)</label>
+              <input type="number" required min={0} value={createFormData.mttr_minutes} onChange={e => setCreateFormData({ ...createFormData, mttr_minutes: Number(e.target.value) })} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Downtime Cost ($/Hour)</label>
@@ -158,8 +158,8 @@ export default function MachineManagement() {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
               <th className="p-4 font-medium">Name</th>
-              <th className="p-4 font-medium">MTTF (hr)</th>
-              <th className="p-4 font-medium">MTTR (hr)</th>
+              <th className="p-4 font-medium">MTTF (min)</th>
+              <th className="p-4 font-medium">MTTR (min)</th>
               <th className="p-4 font-medium">Downtime Cost/hr ($)</th>
               <th className="p-4 font-medium">Last Maint. (days)</th>
               <th className="p-4 font-medium text-right">Actions</th>
@@ -176,8 +176,8 @@ export default function MachineManagement() {
                   {editingId === mac.id ? (
                     <>
                       <td className="p-3"><input type="text" className="w-full p-1 border rounded" value={editFormData.name || ''} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} /></td>
-                      <td className="p-3"><input type="number" className="w-full p-1 border rounded" value={editFormData.mttf_hours || 0} onChange={e => setEditFormData({ ...editFormData, mttf_hours: parseInt(e.target.value) || 0 })} /></td>
-                      <td className="p-3"><input type="number" step="0.1" className="w-full p-1 border rounded" value={editFormData.mttr_hours || 0} onChange={e => setEditFormData({ ...editFormData, mttr_hours: parseFloat(e.target.value) || 0 })} /></td>
+                      <td className="p-3"><input type="number" min={1} className="w-full p-1 border rounded" value={editFormData.mttf_minutes ?? 0} onChange={e => setEditFormData({ ...editFormData, mttf_minutes: parseInt(e.target.value) || 0 })} /></td>
+                      <td className="p-3"><input type="number" min={0} className="w-full p-1 border rounded" value={editFormData.mttr_minutes ?? 0} onChange={e => setEditFormData({ ...editFormData, mttr_minutes: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-3"><input type="number" className="w-full p-1 border rounded" value={editFormData.downtime_cost_per_hour || 0} onChange={e => setEditFormData({ ...editFormData, downtime_cost_per_hour: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-3"><input type="number" className="w-full p-1 border rounded" value={editFormData.last_maintenance_days_ago || 0} onChange={e => setEditFormData({ ...editFormData, last_maintenance_days_ago: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-4">
@@ -190,8 +190,8 @@ export default function MachineManagement() {
                   ) : (
                     <>
                       <td className="p-4 font-medium text-slate-800">{mac.name}</td>
-                      <td className="p-4 text-slate-600">{mac.mttf_hours}</td>
-                      <td className="p-4 text-slate-600">{mac.mttr_hours}</td>
+                      <td className="p-4 text-slate-600">{mac.mttf_minutes ?? 0}</td>
+                      <td className="p-4 text-slate-600">{mac.mttr_minutes ?? 0}</td>
                       <td className="p-4 text-slate-600">${mac.downtime_cost_per_hour}</td>
                       <td className="p-4 text-slate-600">{mac.last_maintenance_days_ago}</td>
                       <td className="p-4">
