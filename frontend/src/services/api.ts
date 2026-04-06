@@ -90,16 +90,49 @@ const DEMO_METRICS: MaintenanceMetrics = {
   ]
 };
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+const deriveMachineHealth = (machine: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
+  const ageDays = toFiniteNumber(machine?.last_maintenance_days_ago);
+  const mttfHours = toFiniteNumber(machine?.mttf_hours);
+
+  // Fallback path when core reliability inputs are missing.
+  if (ageDays === null || mttfHours === null || mttfHours <= 0) {
+    if (ageDays === null) {
+      return { status: 'running', reliabilityScore: 80 };
+    }
+
+    return {
+      status: ageDays > 30 ? 'down' : ageDays > 20 ? 'preventive' : 'running',
+      reliabilityScore: Math.max(0, Math.min(100, 100 - (ageDays * 0.5))),
+    };
+  }
+
+  const pmIntervalDays = Math.max(1, Math.floor((mttfHours / 24) * 0.85));
+  const ageRatio = ageDays / pmIntervalDays;
+
+  const status: Machine['status'] = ageRatio > 1 ? 'down' : ageRatio > 0.8 ? 'preventive' : 'running';
+  const reliabilityScore = Math.max(0, Math.min(100, 100 - (ageRatio * 100)));
+
+  return { status, reliabilityScore };
+};
+
 export const fetchMachines = async (): Promise<Machine[]> => {
   try {
     const res = await fetch(`${API_BASE}/machines`);
     if (res.ok) {
       const data = await res.json();
-      return data.map((d: any) => ({
-        ...d,
-        status: d.last_maintenance_days_ago > 30 ? 'down' : d.last_maintenance_days_ago > 20 ? 'preventive' : 'running',
-        reliabilityScore: Math.max(0, 100 - (d.last_maintenance_days_ago * 0.5))
-      }));
+      return data.map((d: any) => {
+        const health = deriveMachineHealth(d);
+        return {
+          ...d,
+          status: health.status,
+          reliabilityScore: health.reliabilityScore,
+        };
+      });
     }
   } catch (e) {
     console.warn('Backend unavailable, using fallback machines data');
@@ -196,3 +229,60 @@ export const createMaintenanceData = async (data: Omit<MaintenanceData, 'id' | '
   if (!res.ok) throw new Error('Failed to log maintenance data');
   return res.json();
 };
+
+export const getMachineById = async (id: number): Promise<Machine> => {
+  const res = await fetch(`${API_BASE}/machines/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch machine');
+  return res.json();
+};
+
+export const updateMachine = async (id: number, machine: Partial<Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>>): Promise<Machine> => {
+  const res = await fetch(`${API_BASE}/machines/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(machine)
+  });
+  if (!res.ok) throw new Error('Failed to update machine');
+  return res.json();
+};
+
+export const deleteMachine = async (id: number): Promise<void> => {
+  const res = await fetch(`${API_BASE}/machines/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete machine');
+};
+
+export const fetchMaintenanceRecords = async (): Promise<MaintenanceData[]> => {
+  const res = await fetch(`${API_BASE}/maintenance-data`);
+  if (!res.ok) throw new Error('Failed to fetch maintenance records');
+  return res.json();
+};
+
+export const getMaintenanceRecordById = async (id: number): Promise<MaintenanceData> => {
+  const res = await fetch(`${API_BASE}/maintenance-data/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch maintenance record');
+  return res.json();
+};
+
+export const updateMaintenanceData = async (id: number, data: Partial<Omit<MaintenanceData, 'id' | 'machine_name'>>): Promise<MaintenanceData> => {
+  const res = await fetch(`${API_BASE}/maintenance-data/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Failed to update maintenance data');
+  return res.json();
+};
+
+export const deleteMaintenanceData = async (id: number): Promise<void> => {
+  const res = await fetch(`${API_BASE}/maintenance-data/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete maintenance data');
+};
+
+
+
+
+

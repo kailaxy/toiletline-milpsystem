@@ -15,6 +15,10 @@ class MachineCreate(MachineBase):
     pass
 
 
+class MachineUpdate(MachineBase):
+    pass
+
+
 class MachineRead(MachineBase):
     id: int
     created_at: datetime

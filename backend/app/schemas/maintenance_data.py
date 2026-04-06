@@ -10,6 +10,13 @@ class MaintenanceDataCreate(BaseModel):
     notes: str = Field(default="", max_length=255)
 
 
+class MaintenanceDataUpdate(BaseModel):
+    machine_id: int = Field(gt=0)
+    performed_at: datetime
+    duration_hours: float = Field(gt=0)
+    notes: str = Field(default="", max_length=255)
+
+
 class MaintenanceDataRead(MaintenanceDataCreate):
     id: int
     machine_name: str

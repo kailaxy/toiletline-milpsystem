@@ -3,6 +3,8 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Optimization from './pages/Optimization';
 import Schedule from './pages/Schedule';
+import MachineManagement from './pages/MachineManagement';
+import MaintenanceLogs from './pages/MaintenanceLogs';
 
 export default function App() {
   return (
@@ -13,6 +15,8 @@ export default function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="optimization" element={<Optimization />} />
           <Route path="schedule" element={<Schedule />} />
+          <Route path="machines" element={<MachineManagement />} />
+          <Route path="maintenance" element={<MaintenanceLogs />} />
         </Route>
       </Routes>
     </BrowserRouter>

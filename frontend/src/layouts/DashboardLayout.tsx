@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Zap, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Zap, CalendarDays, Settings, History } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -12,6 +12,8 @@ export default function DashboardLayout() {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Optimization', path: '/optimization', icon: Zap },
     { name: 'Schedule', path: '/schedule', icon: CalendarDays },
+    { name: 'Machines', path: '/machines', icon: Settings },
+    { name: 'Maintenance Logs', path: '/maintenance', icon: History },
   ];
 
   return (

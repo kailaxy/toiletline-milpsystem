@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.milp.scheduler import run_maintenance_optimization
 from app.models.machine import Machine
 from app.schemas.optimize import OptimizeRequest, OptimizeResponse
+from app.services.machine_service import get_machines
 
 
 def _resolve_machine_from_identifier(machines: list[Machine], value: str) -> Machine | None:
@@ -105,7 +106,7 @@ def _resolve_machine_inputs(db_machines: list[Machine], payload: OptimizeRequest
 
 
 def optimize_schedule(db: Session, payload: OptimizeRequest) -> OptimizeResponse:
-    db_machines = db.query(Machine).order_by(Machine.id.asc()).all()
+    db_machines = get_machines(db)
     machines = _resolve_machine_inputs(db_machines, payload)
     if not machines:
         raise ValueError("No machines available for optimization")
