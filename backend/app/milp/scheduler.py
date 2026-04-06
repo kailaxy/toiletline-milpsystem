@@ -44,7 +44,7 @@ def _build_machine_profile(machine: Machine, horizon_days: int, slots_per_day: i
     # Capstone formulas (required):
     # pm_interval = floor(mttf * 0.85)
     # pm_duration_hours = mttr_hours * 0.70
-    pm_interval_days = math.floor(mttf_days * 0.85)
+    pm_interval_days = max(1, math.floor(mttf_days * 0.85))
     pm_duration_hours = max(machine.mttr_hours * 0.70, 0.05)
     pm_duration_days = max(1, math.ceil(pm_duration_hours / 24.0))
     pm_interval_slots = pm_interval_days * slots_per_day
@@ -118,7 +118,7 @@ def _build_cycle_windows(profile: MachineProfile, horizon_slots: int) -> list[tu
     if interval <= 0:
         return windows
 
-    deadline = first_deadline
+    deadline = max(0, first_deadline)
     while deadline < horizon_slots:
         window_start = max(0, deadline - interval + 1)
         windows.append((deadline, window_start, deadline))
@@ -139,20 +139,10 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
         for machine in machines
     ]
 
-    # Hard cap per requirements: no more than 2 concurrent maintenance tasks.
-    requested_capacity = request.maintenance_capacity_per_day
-    hard_capacity = max(1, min(requested_capacity, 2))
+    effective_capacity = max(1, request.maintenance_capacity_per_day)
 
-    # Validate immediate due-date feasibility before solving.
     cycle_windows_by_machine: dict[int, list[tuple[int, int, int]]] = {}
     for profile in profiles:
-        first_deadline = _first_due_deadline_slot(profile)
-        if first_deadline < 0:
-            raise ValueError(
-                "Infeasible due-date constraints: "
-                f"machine '{profile.machine_name}' already exceeds pm_interval "
-                f"(current_age_days={profile.current_age_days}, pm_interval_days={profile.pm_interval_days})."
-            )
         cycle_windows_by_machine[profile.machine_id] = _build_cycle_windows(profile, horizon_slots=horizon_slots)
 
     model = LpProblem("preventive_maintenance_scheduler", LpMinimize)
@@ -183,14 +173,14 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
         for _deadline_slot, window_start, window_end in cycle_windows:
             model += lpSum(x[profile.machine_id][slot] for slot in range(window_start, window_end + 1)) == 1
 
-    # Capacity constraint: active concurrent maintenances at each slot index <= hard_capacity (<=2).
+    # Capacity constraint: active concurrent maintenances at each slot index <= requested capacity.
     for slot in range(horizon_slots):
         active_jobs = []
         for profile in profiles:
             for start_slot in range(horizon_slots):
                 if start_slot <= slot < start_slot + profile.pm_duration_slots:
                     active_jobs.append(x[profile.machine_id][start_slot])
-        model += lpSum(active_jobs) <= hard_capacity
+        model += lpSum(active_jobs) <= effective_capacity
 
     if request.avoid_peak_days and request.peak_day_indices:
         forbidden_slots: set[int] = set()
@@ -226,7 +216,7 @@ def run_maintenance_optimization(machines: list[Machine], request: OptimizeReque
     solver_status = LpStatus[model.status]
     if solver_status not in {"Optimal", "Feasible"}:
         raise ValueError(
-            "Infeasible optimization under strict PM due-date and capacity<=2 constraints. "
+            "Infeasible optimization under strict PM due-date and requested capacity constraints. "
             f"Solver status: {solver_status}."
         )
 

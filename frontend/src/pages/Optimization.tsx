@@ -18,8 +18,8 @@ export default function Optimization() {
   };
 
   const handleOptimize = async () => {
-    const boundedHorizon = clampInt(horizonDays, 1, 30);
-    const boundedCapacity = clampInt(capacity, 1, 2);
+    const boundedHorizon = clampInt(horizonDays, 1, 100);
+    const boundedCapacity = clampInt(capacity, 1, 100);
 
     if (boundedHorizon !== horizonDays) setHorizonDays(boundedHorizon);
     if (boundedCapacity !== capacity) setCapacity(boundedCapacity);
@@ -140,11 +140,11 @@ export default function Optimization() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
            <div className="space-y-1">
              <label className="block text-sm font-medium text-slate-700">Horizon (Days)</label>
-             <input type="number" min={1} max={30} value={horizonDays} onChange={e => setHorizonDays(clampInt(Number(e.target.value), 1, 30))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+             <input type="number" min={1} max={100} value={horizonDays} onChange={e => setHorizonDays(clampInt(Number(e.target.value), 1, 100))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
            </div>
            <div className="space-y-1">
              <label className="block text-sm font-medium text-slate-700">Daily Capacity</label>
-             <input type="number" min={1} max={2} value={capacity} onChange={e => setCapacity(clampInt(Number(e.target.value), 1, 2))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
+             <input type="number" min={1} max={100} value={capacity} onChange={e => setCapacity(clampInt(Number(e.target.value), 1, 100))} className="w-full rounded-md border-slate-300 shadow-sm border px-3 py-2 text-slate-900 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors" />
            </div>
            <div className="space-y-1 pb-2 flex items-center gap-2">
              <input type="checkbox" id="avoid" checked={avoidPeak} onChange={e => setAvoidPeak(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />

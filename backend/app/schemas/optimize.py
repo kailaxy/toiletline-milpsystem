@@ -10,9 +10,9 @@ class OptimizeRequest(BaseModel):
         serialization_alias="machineData",
     )
     constraints: "OptimizationConstraints | None" = None
-    horizon_days: int = Field(default=7, ge=1, le=30)
+    horizon_days: int = Field(default=7, ge=1, le=100)
     slots_per_day: int = Field(default=2, ge=1, le=24)
-    maintenance_capacity_per_day: int = Field(default=2, ge=1, le=10)
+    maintenance_capacity_per_day: int = Field(default=2, ge=1, le=100)
     peak_day_indices: list[int] = Field(default_factory=list)
     avoid_peak_days: bool = True
 
@@ -104,7 +104,7 @@ class OptimizationConstraints(BaseModel):
     maintenance_capacity_per_day: int | None = Field(
         default=None,
         ge=1,
-        le=10,
+        le=100,
         validation_alias=AliasChoices("maintenance_capacity_per_day", "maintenanceCapacityPerDay"),
     )
     peak_day_indices: list[int] | None = Field(

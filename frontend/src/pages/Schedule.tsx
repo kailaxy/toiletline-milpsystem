@@ -147,13 +147,12 @@ export default function Schedule() {
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">Machine</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Scheduled Time</th>
                 <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Duration</th>
-                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Cost Impact</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="p-12 text-center text-slate-500">
+                  <td colSpan={3} className="p-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                       <p>Loading schedule...</p>
@@ -162,14 +161,14 @@ export default function Schedule() {
                 </tr>
               ) : !hasCachedOptimization ? (
                 <tr>
-                  <td colSpan={4} className="p-12 text-center text-slate-500 flex flex-col items-center">
+                  <td colSpan={3} className="p-12 text-center text-slate-500 flex flex-col items-center">
                     <CalendarDays className="w-10 h-10 text-slate-400 mb-3" />
                     No optimization result is available yet. Run an optimization first to view the generated schedule.
                   </td>
                 </tr>
               ) : schedule.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-12 text-center text-slate-500 flex flex-col items-center">
+                  <td colSpan={3} className="p-12 text-center text-slate-500 flex flex-col items-center">
                     <CheckCircle className="w-10 h-10 text-green-500 mb-3" />
                     No scheduled maintenance required inside the optimized horizon.
                   </td>
@@ -202,9 +201,6 @@ export default function Schedule() {
                       <div className="flex items-center gap-2 text-slate-600">
                         {formatDuration(task)}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-red-600">
-                      {task.estimated_cost_impact != null ? `PHP ${task.estimated_cost_impact.toLocaleString()}` : <span className="text-slate-300 font-normal">-</span>}
                     </td>
                   </tr>
                 )})

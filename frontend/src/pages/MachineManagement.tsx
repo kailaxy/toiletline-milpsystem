@@ -160,16 +160,15 @@ export default function MachineManagement() {
               <th className="p-4 font-medium">Name</th>
               <th className="p-4 font-medium">MTTF (min)</th>
               <th className="p-4 font-medium">MTTR (min)</th>
-              <th className="p-4 font-medium">Downtime Cost/hr ($)</th>
               <th className="p-4 font-medium">Last Maint. (days)</th>
               <th className="p-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-slate-500">Loading...</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-slate-500">Loading...</td></tr>
             ) : machines.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-slate-500">No machines found</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-slate-500">No machines found</td></tr>
             ) : (
               machines.map((mac) => (
                 <tr key={mac.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
@@ -178,7 +177,6 @@ export default function MachineManagement() {
                       <td className="p-3"><input type="text" className="w-full p-1 border rounded" value={editFormData.name || ''} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} /></td>
                       <td className="p-3"><input type="number" min={1} className="w-full p-1 border rounded" value={editFormData.mttf_minutes ?? 0} onChange={e => setEditFormData({ ...editFormData, mttf_minutes: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-3"><input type="number" min={0} className="w-full p-1 border rounded" value={editFormData.mttr_minutes ?? 0} onChange={e => setEditFormData({ ...editFormData, mttr_minutes: parseInt(e.target.value) || 0 })} /></td>
-                      <td className="p-3"><input type="number" className="w-full p-1 border rounded" value={editFormData.downtime_cost_per_hour || 0} onChange={e => setEditFormData({ ...editFormData, downtime_cost_per_hour: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-3"><input type="number" className="w-full p-1 border rounded" value={editFormData.last_maintenance_days_ago || 0} onChange={e => setEditFormData({ ...editFormData, last_maintenance_days_ago: parseInt(e.target.value) || 0 })} /></td>
                       <td className="p-4">
                         <div className="flex justify-end gap-2">
@@ -192,7 +190,6 @@ export default function MachineManagement() {
                       <td className="p-4 font-medium text-slate-800">{mac.name}</td>
                       <td className="p-4 text-slate-600">{mac.mttf_minutes ?? 0}</td>
                       <td className="p-4 text-slate-600">{mac.mttr_minutes ?? 0}</td>
-                      <td className="p-4 text-slate-600">${mac.downtime_cost_per_hour}</td>
                       <td className="p-4 text-slate-600">{mac.last_maintenance_days_ago}</td>
                       <td className="p-4">
                         <div className="flex justify-end gap-2">
