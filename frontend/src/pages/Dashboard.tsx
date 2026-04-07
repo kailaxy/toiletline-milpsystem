@@ -19,6 +19,12 @@ export default function Dashboard() {
 
   const totalDowntime = data?.downtimeDuration.reduce((acc, curr) => acc + curr.value, 0) || 0;
 
+  const statusBadgeMap: Record<Machine['status'], { label: string; className: string }> = {
+    running: { label: 'Running', className: 'bg-green-100 text-green-700' },
+    preventive: { label: 'Preventive', className: 'bg-amber-100 text-amber-700' },
+    down: { label: 'Down / Anomaly', className: 'bg-red-100 text-red-700' },
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 w-full">
       <h1 className="text-3xl font-bold text-slate-800">Tissue Line Overview</h1>
@@ -99,15 +105,15 @@ export default function Dashboard() {
                         </tr>
                     </thead>
                     <tbody>
-                        {machines.map((m) => (
-                            <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      {machines.map((m) => {
+                        const statusBadge = statusBadgeMap[m.status];
+
+                        return (
+                        <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50">
                                 <td className="px-6 py-4 font-medium text-slate-900">{m.name}</td>
                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold
-                                        ${m.status === 'running' ? 'bg-green-100 text-green-700' :
-                                          m.status === 'preventive' ? 'bg-amber-100 text-amber-700' :
-                                          'bg-red-100 text-red-700'}`}>
-                                        {m.status.toUpperCase()}
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusBadge.className}`}>
+                              {statusBadge.label}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-right text-slate-600">{m.mttf_minutes?.toLocaleString() ?? 'N/A'}</td>
@@ -121,7 +127,7 @@ export default function Dashboard() {
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                              )})}
                     </tbody>
                 </table>
             </div>

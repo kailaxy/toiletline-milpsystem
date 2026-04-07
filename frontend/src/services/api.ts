@@ -341,8 +341,6 @@ const toFiniteNumber = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
-
 const hoursToMinutes = (hours: number): number => hours * MINUTES_PER_HOUR;
 const minutesToHours = (minutes: number): number => minutes / MINUTES_PER_HOUR;
 
@@ -363,9 +361,13 @@ const toMinutesFromPayload = (machine: any, minuteKey: 'mttf_minutes' | 'mttr_mi
 const normalizeMachinePayload = (machine: any): Machine => {
   const mttf_minutes = toMinutesFromPayload(machine, 'mttf_minutes', 'mttf_hours');
   const mttr_minutes = toMinutesFromPayload(machine, 'mttr_minutes', 'mttr_hours');
-  const health = deriveMachineHealth({ ...machine, mttf_minutes, mttr_minutes });
   const mttf_hours = mttf_minutes === undefined ? undefined : minutesToHours(mttf_minutes);
   const mttr_hours = mttr_minutes === undefined ? undefined : minutesToHours(mttr_minutes);
+  const health = deriveMachineHealth({
+    ...machine,
+    mttf_hours,
+    last_maintenance_days_ago: toFiniteNumber(machine?.last_maintenance_days_ago),
+  });
 
   return {
     id: Number(machine?.id),
@@ -405,46 +407,30 @@ const toBackendMachinePayload = (
   return payload;
 };
 
-const deriveMachineHealth = (machine: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
-  const ageDays = toFiniteNumber(machine?.last_maintenance_days_ago);
-  const mttfMinutes = toMinutesFromPayload(machine, 'mttf_minutes', 'mttf_hours');
-  const mttrMinutes = toMinutesFromPayload(machine, 'mttr_minutes', 'mttr_hours');
+const deriveMachineHealth = (machineInput: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
+  const machine = {
+    mttf_hours: toFiniteNumber(machineInput?.mttf_hours),
+    last_maintenance_days_ago: toFiniteNumber(machineInput?.last_maintenance_days_ago),
+  };
 
-  // Fallback path when both reliability metrics are missing.
-  if (mttfMinutes === undefined && mttrMinutes === undefined) {
-    if (ageDays === null) {
-      return { status: 'running', reliabilityScore: 80 };
-    }
-
-    const ageOnlyScore = Math.round(clamp(90 - (ageDays * 1.1), 5, 95));
-    const ageOnlyStatus: Machine['status'] = ageOnlyScore < 35 ? 'down' : ageOnlyScore < 60 ? 'preventive' : 'running';
-    return { status: ageOnlyStatus, reliabilityScore: ageOnlyScore };
+  // Guard invalid values while preserving the exact formula for valid inputs.
+  if (
+    machine.mttf_hours === null
+    || machine.mttf_hours <= 0
+    || machine.last_maintenance_days_ago === null
+    || machine.last_maintenance_days_ago < 0
+  ) {
+    return { status: 'down', reliabilityScore: 0 };
   }
 
-  const normalizedMttf = mttfMinutes === undefined
-    ? 0.5
-    : clamp((mttfMinutes - 12000) / 36000, 0, 1);
+  const ageHours = machine.last_maintenance_days_ago * 24;
+  const reliabilityScore = Math.round(Math.max(0, ((machine.mttf_hours - ageHours) / machine.mttf_hours) * 100));
 
-  const normalizedMttr = mttrMinutes === undefined
-    ? 0.5
-    : 1 - clamp((mttrMinutes - 120) / 780, 0, 1);
-
-  const normalizedAge = ageDays === null
-    ? 0
-    : clamp(ageDays / 30, 0, 1);
-
-  const baseReliability = 35 + (normalizedMttf * 45) + (normalizedMttr * 20);
-  const ageDecay = normalizedAge * 45;
-  const reliabilityScore = Math.round(clamp(baseReliability - ageDecay, 0, 100));
-
-  let status: Machine['status'];
-  if (reliabilityScore < 35 || (ageDays !== null && ageDays > 60 && reliabilityScore < 50)) {
-    status = 'down';
-  } else if (reliabilityScore < 60 || (ageDays !== null && ageDays > 40)) {
-    status = 'preventive';
-  } else {
-    status = 'running';
-  }
+  const status: Machine['status'] = reliabilityScore >= 85
+    ? 'running'
+    : reliabilityScore > 0 && reliabilityScore < 85
+      ? 'preventive'
+      : 'down';
 
   return { status, reliabilityScore };
 };
@@ -459,7 +445,7 @@ export const fetchMachines = async (): Promise<Machine[]> => {
   } catch (e) {
     console.warn('Backend unavailable, using fallback machines data');
   }
-  return DEMO_MACHINES;
+  return DEMO_MACHINES.map((machine) => normalizeMachinePayload(machine));
 };
 
 export const fetchMaintenanceData = async (): Promise<MaintenanceMetrics> => {
