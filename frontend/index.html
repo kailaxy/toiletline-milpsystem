@@ -1,12 +1,165 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Preventive Maintenance Scheduling system</title>
-  </head>
-  <body class="bg-gray-50 text-slate-900 font-sans antialiased">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vite Error Overlay</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #d1d1d1;
+            --accent-purple: #bd34fe;
+            --error-red: #f87171;
+            --code-bg: #242424;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* The Overlay Container */
+        .vite-error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            box-sizing: border-box;
+            z-index: 9999;
+        }
+
+        .error-card {
+            background: var(--code-bg);
+            width: 100%;
+            max-width: 800px;
+            border-radius: 8px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .error-header {
+            padding: 16px 20px;
+            background: #2a2a2a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .error-title {
+            color: var(--error-red);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .vite-logo {
+            font-weight: bold;
+            background: linear-gradient(45deg, #41d1ff, var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 0.9rem;
+        }
+
+        /* Content Area */
+        .error-body {
+            padding: 24px;
+            font-family: 'Menlo', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .error-message {
+            color: #fff;
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            word-break: break-all;
+        }
+
+        .file-path {
+            color: #aaa;
+            margin-bottom: 20px;
+            display: block;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+        }
+
+        /* Code Block Snippet */
+        .code-snippet {
+            background: #111;
+            padding: 16px;
+            border-radius: 4px;
+            border-left: 4px solid var(--error-red);
+            color: #9ca3af;
+        }
+
+        .line-number {
+            color: #4b5563;
+            margin-right: 15px;
+            user-select: none;
+        }
+
+        .line-error {
+            color: #fff;
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        .highlight {
+            color: var(--error-red);
+            font-weight: bold;
+        }
+
+        .footer-hint {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="vite-error-overlay">
+        <div class="error-card">
+            <div class="error-header">
+                <span class="error-title">[plugin:vite:import-analysis]</span>
+                <span class="vite-logo">VITE v5.2.0</span>
+            </div>
+            
+            <div class="error-body">
+                <div class="error-message">Failed to resolve import "./components/Header.jsx" from "src/App.jsx". Does the file exist?</div>
+                
+                <code class="file-path">/Users/project/src/App.jsx:4:7</code>
+
+                <div class="code-snippet">
+                    <div><span class="line-number">2 |</span> import { useState } from 'react'</div>
+                    <div><span class="line-number">3 |</span> import './App.css'</div>
+                    <div class="line-error"><span class="line-number">4 |</span> <span class="highlight">import Header from './components/Header.jsx'</span></div>
+                    <div><span class="line-number">5 |</span> </div>
+                    <div><span class="line-number">6 |</span> function App() {</div>
+                </div>
+            </div>
+        </div>
+        <div class="footer-hint">Click outside or fix the code to dismiss.</div>
+    </div>
+
+</body>
 </html>
