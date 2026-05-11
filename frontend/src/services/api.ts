@@ -421,25 +421,31 @@ const toBackendMachinePayload = (
 const deriveMachineHealth = (machineInput: any): Pick<Machine, 'status' | 'reliabilityScore'> => {
   const machine = {
     mttf_hours: toFiniteNumber(machineInput?.mttf_hours),
+    mttr_hours: toFiniteNumber(machineInput?.mttr_hours),
     last_maintenance_days_ago: toFiniteNumber(machineInput?.last_maintenance_days_ago),
   };
 
-  // Guard invalid values while preserving the exact formula for valid inputs.
+  // Guard invalid values while preserving a stable normalized score for valid inputs.
   if (
     machine.mttf_hours === null
     || machine.mttf_hours <= 0
+    || machine.mttr_hours === null
+    || machine.mttr_hours < 0
     || machine.last_maintenance_days_ago === null
     || machine.last_maintenance_days_ago < 0
   ) {
     return { status: 'down', reliabilityScore: 0 };
   }
 
-  const ageHours = machine.last_maintenance_days_ago * 24;
-  const reliabilityScore = Math.round(Math.max(0, ((machine.mttf_hours - ageHours) / machine.mttf_hours) * 100));
+  const availabilityComponent = machine.mttf_hours / (machine.mttf_hours + machine.mttr_hours + 1);
+  const freshnessComponent = Math.max(0, 1 - (machine.last_maintenance_days_ago / 30));
+  const reliabilityScore = Math.round(
+    Math.max(0, Math.min(100, (availabilityComponent * 0.7 + freshnessComponent * 0.3) * 100))
+  );
 
   const status: Machine['status'] = reliabilityScore >= 85
     ? 'running'
-    : reliabilityScore > 0 && reliabilityScore < 85
+    : reliabilityScore >= 45
       ? 'preventive'
       : 'down';
 
