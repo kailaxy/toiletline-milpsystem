@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchMachines, createMachine, updateMachine, deleteMachine, Machine } from '../services/api';
 import { Pencil, Trash2, Check, X, PlusCircle, AlertCircle } from 'lucide-react';
 import { PINModal } from '../components/PINModal';
-import { isPINAuthorized, setPINAuthorized } from '../services/pinService';
+import { clearPINAuthorized, isPINAuthorized, setPINAuthorized } from '../services/pinService';
 
 export default function MachineManagement() {
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -144,13 +144,14 @@ export default function MachineManagement() {
   const handlePINSubmit = async (pin: string) => {
     try {
       setPinError(null);
-      setPINAuthorized(pin);
       if (pendingAction) {
+        setPINAuthorized(pin);
         await pendingAction();
       }
       setShowPINModal(false);
       setPendingAction(null);
     } catch (err: any) {
+      clearPINAuthorized();
       if (err.message?.includes('Invalid') || err.message?.includes('401')) {
         setPinError('Invalid PIN');
       } else {
