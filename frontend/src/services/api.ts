@@ -1,4 +1,4 @@
-import { getAuthorizedPIN } from './pinService';
+import { getAuthorizedPIN, clearPINAuthorized } from './pinService';
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -7,6 +7,8 @@ const getDefaultHeaders = () => {
   const authorizedPin = getAuthorizedPIN();
   if (authorizedPin) {
     headers['X-Action-PIN'] = authorizedPin;
+    // Consume single-use PIN so subsequent requests require re-entry
+    clearPINAuthorized();
   }
   return headers;
 };
