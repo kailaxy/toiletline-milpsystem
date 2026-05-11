@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { getMachineColor, MACHINE_COLOR_MAP, runOptimization, OptimizeResponse } from '../services/api';
 import { Loader2, ArrowRight } from 'lucide-react';
+import { PINModal } from '../components/PINModal';
+import { isPINAuthorized, setPINAuthorized } from '../services/pinService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Optimization() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   
   const [horizonDays, setHorizonDays] = useState(7);
   const [capacity, setCapacity] = useState(2);
@@ -17,7 +21,7 @@ export default function Optimization() {
     return Math.min(max, Math.max(min, Math.trunc(value)));
   };
 
-  const handleOptimize = async () => {
+  const executeOptimize = async () => {
     const boundedHorizon = clampInt(horizonDays, 1, 100);
     const boundedCapacity = clampInt(capacity, 1, 100);
 
@@ -40,6 +44,29 @@ export default function Optimization() {
       setApiError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOptimize = async () => {
+    if (!isPINAuthorized()) {
+      setShowPINModal(true);
+      return;
+    }
+    await executeOptimize();
+  };
+
+  const handlePINSubmit = async (pin: string) => {
+    try {
+      setPinError(null);
+      setPINAuthorized(pin);
+      setShowPINModal(false);
+      await executeOptimize();
+    } catch (err: any) {
+      if (err.message?.includes('Invalid') || err.message?.includes('401')) {
+        setPinError('Invalid PIN');
+      } else {
+        setPinError(err.message || 'Action failed');
+      }
     }
   };
 
@@ -245,6 +272,16 @@ export default function Optimization() {
           </div>
         </div>
       )}
+
+      <PINModal
+        isOpen={showPINModal}
+        onSubmit={handlePINSubmit}
+        onCancel={() => {
+          setShowPINModal(false);
+          setPinError(null);
+        }}
+        error={pinError || undefined}
+      />
     </div>
   );
 }

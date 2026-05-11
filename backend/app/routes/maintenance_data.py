@@ -7,6 +7,7 @@ from app.schemas.maintenance_data import (
     MaintenanceDataRead,
     MaintenanceDataUpdate,
 )
+from app.security.pin_validator import verify_action_pin
 from app.services.maintenance_service import (
     create_maintenance_record,
     delete_maintenance_record,
@@ -20,7 +21,7 @@ router = APIRouter(tags=["maintenance-data"])
 
 @router.post("/maintenance-data", response_model=MaintenanceDataRead, status_code=201)
 def create_maintenance_data_route(
-    payload: MaintenanceDataCreate, db: Session = Depends(get_db)
+    payload: MaintenanceDataCreate, db: Session = Depends(get_db), pin_verified: bool = Depends(verify_action_pin)
 ) -> MaintenanceDataRead:
     try:
         record = create_maintenance_record(db, payload)
@@ -74,6 +75,7 @@ def update_maintenance_data_route(
     record_id: int,
     payload: MaintenanceDataUpdate,
     db: Session = Depends(get_db),
+    pin_verified: bool = Depends(verify_action_pin),
 ) -> MaintenanceDataRead:
     record = get_maintenance_record(db, record_id)
     if record is None:
@@ -95,7 +97,7 @@ def update_maintenance_data_route(
 
 
 @router.delete("/maintenance-data/{record_id}", status_code=204)
-def delete_maintenance_data_route(record_id: int, db: Session = Depends(get_db)) -> None:
+def delete_maintenance_data_route(record_id: int, db: Session = Depends(get_db), pin_verified: bool = Depends(verify_action_pin)) -> None:
     record = get_maintenance_record(db, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Maintenance record not found")

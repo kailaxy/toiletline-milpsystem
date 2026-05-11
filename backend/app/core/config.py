@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Settings(BaseModel):
@@ -8,6 +8,7 @@ class Settings(BaseModel):
     app_version: str = "0.1.0"
     sqlite_db_path: str = "backend/milp_system.db"
     cors_origins: list[str] = ["*"]
+    system_pin: str = Field(default="1234", description="PIN for protecting mutations (POST/PUT/DELETE)")
 
     @property
     def sqlite_db_file_path(self) -> Path:

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.machine import MachineCreate, MachineRead, MachineUpdate
+from app.security.pin_validator import verify_action_pin
 from app.services.machine_service import (
     create_machine,
     delete_machine,
@@ -16,7 +17,7 @@ router = APIRouter(tags=["machines"])
 
 
 @router.post("/machines", response_model=MachineRead, status_code=201)
-def create_machine_route(payload: MachineCreate, db: Session = Depends(get_db)) -> MachineRead:
+def create_machine_route(payload: MachineCreate, db: Session = Depends(get_db), pin_verified: bool = Depends(verify_action_pin)) -> MachineRead:
     if is_machine_name_conflict(db, payload.name):
         raise HTTPException(status_code=409, detail="Machine name already exists")
     machine = create_machine(db, payload)
@@ -43,6 +44,7 @@ def update_machine_route(
     machine_id: int,
     payload: MachineUpdate,
     db: Session = Depends(get_db),
+    pin_verified: bool = Depends(verify_action_pin),
 ) -> MachineRead:
     machine = get_machine_by_id(db, machine_id)
     if machine is None:
@@ -56,7 +58,7 @@ def update_machine_route(
 
 
 @router.delete("/machines/{machine_id}", status_code=204)
-def delete_machine_route(machine_id: int, db: Session = Depends(get_db)) -> None:
+def delete_machine_route(machine_id: int, db: Session = Depends(get_db), pin_verified: bool = Depends(verify_action_pin)) -> None:
     machine = get_machine_by_id(db, machine_id)
     if machine is None:
         raise HTTPException(status_code=404, detail="Machine not found")

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { fetchMaintenanceRecords, createMaintenanceData, updateMaintenanceData, deleteMaintenanceData, fetchMachines, MaintenanceData, Machine } from '../services/api';
 import { Pencil, Trash2, Check, X, PlusCircle, AlertCircle } from 'lucide-react';
+import { PINModal } from '../components/PINModal';
+import { isPINAuthorized, setPINAuthorized } from '../services/pinService';
 
 const toLocalDateTimeInputValue = (value: Date | string): string => {
   const date = value instanceof Date ? value : new Date(value);
@@ -14,6 +16,11 @@ export default function MaintenanceLogs() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // PIN Modal state
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
 
   // Edit Mode state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -63,6 +70,19 @@ export default function MaintenanceLogs() {
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
+    if (!isPINAuthorized()) {
+      setPendingAction(() => async () => {
+        const id = editingId;
+        const { id: _, machine_name, ...payload } = editFormData as any;
+        await updateMaintenanceData(id, payload);
+        setSuccess('Log updated successfully');
+        setEditingId(null);
+        loadData();
+        setTimeout(() => setSuccess(null), 3000);
+      });
+      setShowPINModal(true);
+      return;
+    }
     try {
       const { id, machine_name, ...payload } = editFormData as any;
       await updateMaintenanceData(editingId, payload);
@@ -77,6 +97,16 @@ export default function MaintenanceLogs() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this log?')) return;
+    if (!isPINAuthorized()) {
+      setPendingAction(() => async () => {
+        await deleteMaintenanceData(id);
+        setSuccess('Log deleted successfully');
+        loadData();
+        setTimeout(() => setSuccess(null), 3000);
+      });
+      setShowPINModal(true);
+      return;
+    }
     try {
       await deleteMaintenanceData(id);
       setSuccess('Log deleted successfully');
@@ -91,6 +121,23 @@ export default function MaintenanceLogs() {
     e.preventDefault();
     if (!createFormData.machine_id) {
       setError('Please select a machine');
+      return;
+    }
+    if (!isPINAuthorized()) {
+      setPendingAction(() => async () => {
+        await createMaintenanceData(createFormData);
+        setSuccess('Log created successfully');
+        setIsCreating(false);
+        setCreateFormData({
+          machine_id: machines[0]?.id || 0,
+          performed_at: toLocalDateTimeInputValue(new Date()),
+          duration_hours: 1,
+          notes: ''
+        });
+        loadData();
+        setTimeout(() => setSuccess(null), 3000);
+      });
+      setShowPINModal(true);
       return;
     }
     
@@ -108,6 +155,23 @@ export default function MaintenanceLogs() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Failed to create log');
+    }
+  };
+  const handlePINSubmit = async (pin: string) => {
+    try {
+      setPinError(null);
+      setPINAuthorized(pin);
+      if (pendingAction) {
+        await pendingAction();
+      }
+      setShowPINModal(false);
+      setPendingAction(null);
+    } catch (err: any) {
+      if (err.message?.includes('Invalid') || err.message?.includes('401')) {
+        setPinError('Invalid PIN');
+      } else {
+        setPinError(err.message || 'Action failed');
+      }
     }
   };
 
@@ -237,6 +301,17 @@ export default function MaintenanceLogs() {
           </tbody>
         </table>
       </div>
+
+      <PINModal
+        isOpen={showPINModal}
+        onSubmit={handlePINSubmit}
+        onCancel={() => {
+          setShowPINModal(false);
+          setPendingAction(null);
+          setPinError(null);
+        }}
+        error={pinError || undefined}
+      />
     </div>
   );
 }

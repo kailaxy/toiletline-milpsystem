@@ -1,4 +1,15 @@
+import { getAuthorizedPIN } from './pinService';
+
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+const getDefaultHeaders = () => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const authorizedPin = getAuthorizedPIN();
+  if (authorizedPin) {
+    headers['X-Action-PIN'] = authorizedPin;
+  }
+  return headers;
+};
 const LOCAL_DEMO_MODE = String(import.meta.env.VITE_LOCAL_DEMO_MODE || '').toLowerCase() === 'true';
 
 const isLocalhostApiBase = (baseUrl: string): boolean => {
@@ -494,7 +505,7 @@ export const runOptimization = async (params: OptimizeRequest): Promise<Optimize
   try {
     const res = await fetch(`${API_BASE}/optimize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getDefaultHeaders(),
       body: JSON.stringify(params)
     });
     if (!res.ok) {
@@ -526,7 +537,7 @@ export const runOptimization = async (params: OptimizeRequest): Promise<Optimize
 export const createMachine = async (machine: Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>): Promise<Machine> => {
   const res = await fetch(`${API_BASE}/machines`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getDefaultHeaders(),
     body: JSON.stringify(toBackendMachinePayload(machine))
   });
   if (!res.ok) throw new Error('Failed to create machine');
@@ -537,7 +548,7 @@ export const createMachine = async (machine: Omit<Machine, 'id' | 'created_at' |
 export const createMaintenanceData = async (data: Omit<MaintenanceData, 'id' | 'machine_name'>): Promise<MaintenanceData> => {
   const res = await fetch(`${API_BASE}/maintenance-data`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getDefaultHeaders(),
     body: JSON.stringify(data)
   });
   if (!res.ok) throw new Error('Failed to log maintenance data');
@@ -554,7 +565,7 @@ export const getMachineById = async (id: number): Promise<Machine> => {
 export const updateMachine = async (id: number, machine: Partial<Omit<Machine, 'id' | 'created_at' | 'status' | 'reliabilityScore'>>): Promise<Machine> => {
   const res = await fetch(`${API_BASE}/machines/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getDefaultHeaders(),
     body: JSON.stringify(toBackendMachinePayload(machine))
   });
   if (!res.ok) throw new Error('Failed to update machine');
@@ -565,6 +576,7 @@ export const updateMachine = async (id: number, machine: Partial<Omit<Machine, '
 export const deleteMachine = async (id: number): Promise<void> => {
   const res = await fetch(`${API_BASE}/machines/${id}`, {
     method: 'DELETE',
+    headers: getDefaultHeaders(),
   });
   if (!res.ok) throw new Error('Failed to delete machine');
 };
@@ -584,7 +596,7 @@ export const getMaintenanceRecordById = async (id: number): Promise<MaintenanceD
 export const updateMaintenanceData = async (id: number, data: Partial<Omit<MaintenanceData, 'id' | 'machine_name'>>): Promise<MaintenanceData> => {
   const res = await fetch(`${API_BASE}/maintenance-data/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getDefaultHeaders(),
     body: JSON.stringify(data)
   });
   if (!res.ok) throw new Error('Failed to update maintenance data');
@@ -594,6 +606,7 @@ export const updateMaintenanceData = async (id: number, data: Partial<Omit<Maint
 export const deleteMaintenanceData = async (id: number): Promise<void> => {
   const res = await fetch(`${API_BASE}/maintenance-data/${id}`, {
     method: 'DELETE',
+    headers: getDefaultHeaders(),
   });
   if (!res.ok) throw new Error('Failed to delete maintenance data');
 };

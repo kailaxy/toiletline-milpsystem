@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { createMachine, createMaintenanceData, Machine } from '../services/api';
 import { PlusCircle, Activity, Wrench, CheckCircle, AlertCircle } from 'lucide-react';
+import { PINModal } from './PINModal';
+import { isPINAuthorized, setPINAuthorized } from '../services/pinService';
 
 export default function DataEntryForms({ machines, onRefresh }: { machines: Machine[], onRefresh: () => void }) {
   const [activeTab, setActiveTab] = useState<'machine' | 'maintenance'>('machine');
@@ -21,8 +23,12 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const handleCreateMachine = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // PIN Modal state
+  const [showPINModal, setShowPINModal] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
+
+  const executeCreateMachine = async () => {
     if (!machineName.trim()) {
       setMessage({ type: 'error', text: 'Machine name is required.' });
       return;
@@ -47,8 +53,17 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
     }
   };
 
-  const handleCreateMaintenance = async (e: React.FormEvent) => {
+  const handleCreateMachine = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPINAuthorized()) {
+      setPendingAction(() => executeCreateMachine);
+      setShowPINModal(true);
+      return;
+    }
+    await executeCreateMachine();
+  };
+
+  const executeCreateMaintenance = async () => {
     if (!machineId) {
       setMessage({ type: 'error', text: 'Please select a machine.' });
       return;
@@ -69,6 +84,34 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
       setMessage({ type: 'error', text: err.message || 'Failed to log maintenance.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateMaintenance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isPINAuthorized()) {
+      setPendingAction(() => executeCreateMaintenance);
+      setShowPINModal(true);
+      return;
+    }
+    await executeCreateMaintenance();
+  };
+
+  const handlePINSubmit = async (pin: string) => {
+    try {
+      setPinError(null);
+      setPINAuthorized(pin);
+      if (pendingAction) {
+        await pendingAction();
+      }
+      setShowPINModal(false);
+      setPendingAction(null);
+    } catch (err: any) {
+      if (err.message?.includes('Invalid') || err.message?.includes('401')) {
+        setPinError('Invalid PIN');
+      } else {
+        setPinError(err.message || 'Action failed');
+      }
     }
   };
 
@@ -166,6 +209,17 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
            </div>
         </form>
       )}
+
+      <PINModal
+        isOpen={showPINModal}
+        onSubmit={handlePINSubmit}
+        onCancel={() => {
+          setShowPINModal(false);
+          setPendingAction(null);
+          setPinError(null);
+        }}
+        error={pinError || undefined}
+      />
     </div>
   );
 }
