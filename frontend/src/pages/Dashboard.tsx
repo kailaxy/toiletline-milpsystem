@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { fetchMachines, fetchMaintenanceData, Machine, MaintenanceMetrics } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Line } from 'recharts';
 import { Activity, Clock, Wrench } from 'lucide-react';
 import { default as DataEntryForms } from '../components/DataEntryForms';
 
 export default function Dashboard() {
+  const location = useLocation();
   const [machines, setMachines] = useState<Machine[]>([]);
   const [data, setData] = useState<MaintenanceMetrics | null>(null);
 
@@ -15,7 +17,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [location.pathname]);
 
   const totalDowntime = data?.downtimeDuration.reduce((acc, curr) => acc + curr.value, 0) || 0;
 
