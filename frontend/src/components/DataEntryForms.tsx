@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createMachine, createMaintenanceData, Machine } from '../services/api';
 import { PlusCircle, Activity, Wrench, CheckCircle, AlertCircle } from 'lucide-react';
 import { PINModal } from './PINModal';
-import { isPINAuthorized, setPINAuthorized } from '../services/pinService';
+import { clearPINAuthorized, isPINAuthorized, setPINAuthorized } from '../services/pinService';
 
 export default function DataEntryForms({ machines, onRefresh }: { machines: Machine[], onRefresh: () => void }) {
   const [activeTab, setActiveTab] = useState<'machine' | 'maintenance'>('machine');
@@ -100,13 +100,14 @@ export default function DataEntryForms({ machines, onRefresh }: { machines: Mach
   const handlePINSubmit = async (pin: string) => {
     try {
       setPinError(null);
-      setPINAuthorized(pin);
       if (pendingAction) {
+        setPINAuthorized(pin);
         await pendingAction();
       }
       setShowPINModal(false);
       setPendingAction(null);
     } catch (err: any) {
+      clearPINAuthorized();
       if (err.message?.includes('Invalid') || err.message?.includes('401')) {
         setPinError('Invalid PIN');
       } else {
